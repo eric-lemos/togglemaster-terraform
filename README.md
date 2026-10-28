@@ -22,12 +22,19 @@ rds_instance_passwords = {
 
 As senhas devem ter pelo menos oito caracteres e não podem conter `/`, `@`, aspas duplas ou espaços.
 
-Defina o bucket de state e a região. O nome do bucket S3 deve ser globalmente único:
+Defina a região AWS. O nome do bucket de state é gerado de forma determinística
+a partir do ID da conta AWS e da região (`togglemaster-tfstate-<account-id>-<region>`).
+Assim, não é necessário escolher um nome global manualmente; o mesmo nome é usado
+em execuções futuras na mesma conta e região:
 
 ```bash
-export TF_BACKEND_BUCKET="my-unique-togglemaster-tfstate"
 export AWS_REGION="us-east-1"
+export TF_BACKEND_BUCKET="$(bash scripts/backend_bucket_name.sh "$AWS_REGION")"
 ```
+
+Se já houver um state em outro bucket acessível, migre-o antes da próxima execução
+com `terraform init -migrate-state` e os mesmos parâmetros `-backend-config`.
+O bucket fixo anterior `bkt-togglemaster-tfstate` não será mais usado.
 
 Prepare o backend e execute o Terraform:
 
@@ -62,8 +69,13 @@ Configure em **Settings > Secrets and variables > Actions**:
 
 ```text
 AWS_REGION=us-east-1
-TF_BACKEND_BUCKET=my-unique-togglemaster-tfstate
 ```
+
+O workflow gera `TF_BACKEND_BUCKET` dinamicamente usando a conta autenticada e
+`AWS_REGION`; não é preciso cadastrar essa variável no GitHub. Se uma variável
+`TF_BACKEND_BUCKET` antiga existir nas Actions, ela não será mais usada.
+Um bucket já pertencente à sua conta será reutilizado e terá versionamento,
+criptografia e bloqueio de acesso público verificados/configurados pelo script.
 
 ### Secrets
 

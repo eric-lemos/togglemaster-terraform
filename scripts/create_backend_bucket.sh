@@ -2,23 +2,49 @@
 
 set -Eeuo pipefail
 
-readonly BUCKET_NAME="${1:-${TF_BACKEND_BUCKET}}"
-readonly AWS_REGION="${2:-${AWS_REGION}}"
+BUCKET_NAME="${1:-${TF_BACKEND_BUCKET:-}}"
+readonly AWS_REGION="${2:-${AWS_REGION:-}}"
+ACCOUNT_ID=""
 
 checkPrerequisites() {
+    [[ -n "$AWS_REGION" ]] || {
+        echo "ERROR: AWS_REGION must be provided." >&2
+        return 1
+    }
+
     command -v aws >/dev/null 2>&1 || {
         echo "ERROR: AWS CLI is required." >&2
         return 1
     }
 
-    aws sts get-caller-identity >/dev/null || {
+    ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)" || {
         echo "ERROR: AWS credentials are unavailable or expired." >&2
         return 1
     }
+
+    if [[ ${#ACCOUNT_ID} -ne 12 ]]; then
+        echo "ERROR: Could not determine a valid 12-digit AWS account ID." >&2
+        return 1
+    fi
+
+    case "$ACCOUNT_ID" in
+        *[!0123456789]*)
+            echo "ERROR: Could not determine a valid 12-digit AWS account ID." >&2
+            return 1
+            ;;
+    esac
+
+    if [[ -z "$BUCKET_NAME" ]]; then
+        BUCKET_NAME="$(bash "$(dirname "${BASH_SOURCE[0]}")/backend_bucket_name.sh" \
+            "$AWS_REGION" "$ACCOUNT_ID")"
+    fi
 }
 
 createBucket() {
-    if aws s3api head-bucket --bucket "$BUCKET_NAME" --region "$AWS_REGION" 2>/dev/null; then
+    if aws s3api head-bucket \
+        --bucket "$BUCKET_NAME" \
+        --region "$AWS_REGION" \
+        --expected-bucket-owner "$ACCOUNT_ID" 2>/dev/null; then
         echo "S3 bucket already exists and is accessible: $BUCKET_NAME"
         return 0
     fi
@@ -26,15 +52,28 @@ createBucket() {
     echo "Creating S3 bucket for Terraform backend: $BUCKET_NAME"
 
     if [[ "$AWS_REGION" == "us-east-1" ]]; then
-        aws s3api create-bucket \
-            --bucket "$BUCKET_NAME" \
-            --region "$AWS_REGION"
+        if aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$AWS_REGION"; then
+            return 0
+        fi
     else
-        aws s3api create-bucket \
+        if aws s3api create-bucket \
             --bucket "$BUCKET_NAME" \
             --region "$AWS_REGION" \
-            --create-bucket-configuration "LocationConstraint=$AWS_REGION"
+            --create-bucket-configuration "LocationConstraint=$AWS_REGION"; then
+            return 0
+        fi
     fi
+
+    if aws s3api head-bucket \
+        --bucket "$BUCKET_NAME" \
+        --region "$AWS_REGION" \
+        --expected-bucket-owner "$ACCOUNT_ID" 2>/dev/null; then
+        echo "S3 bucket was created concurrently and is accessible: $BUCKET_NAME"
+        return 0
+    fi
+
+    echo "ERROR: Could not create or access $BUCKET_NAME. Check S3 permissions and bucket-name availability." >&2
+    return 1
 }
 
 configureBucket() {
@@ -93,6 +132,7 @@ configureBucket() {
 
 main() {
     checkPrerequisites
+    echo "Using Terraform backend bucket: $BUCKET_NAME"
     createBucket
     configureBucket
     echo "Terraform backend bucket is ready: $BUCKET_NAME ($AWS_REGION)"

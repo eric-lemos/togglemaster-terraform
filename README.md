@@ -14,9 +14,9 @@ Crie o arquivo `secrets.auto.tfvars`, que é ignorado pelo Git, com uma senha pa
 
 ```hcl
 rds_instance_passwords = {
-	auth       = "REPLACE_WITH_A_STRONG_PASSWORD"
-	evaluation = "REPLACE_WITH_A_STRONG_PASSWORD"
-	flags      = "REPLACE_WITH_A_STRONG_PASSWORD"
+  auth       = "REPLACE_WITH_A_STRONG_PASSWORD"
+  evaluation = "REPLACE_WITH_A_STRONG_PASSWORD"
+  flags      = "REPLACE_WITH_A_STRONG_PASSWORD"
 }
 ```
 
@@ -35,8 +35,8 @@ Prepare o backend e execute o Terraform:
 bash scripts/create_backend_bucket.sh "$TF_BACKEND_BUCKET" "$AWS_REGION"
 
 terraform init \
-	-backend-config="bucket=$TF_BACKEND_BUCKET" \
-	-backend-config="region=$AWS_REGION"
+  -backend-config="bucket=$TF_BACKEND_BUCKET" \
+  -backend-config="region=$AWS_REGION"
 
 terraform plan
 terraform apply

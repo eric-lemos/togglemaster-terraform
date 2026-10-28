@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - "**/*.tf"
+      - "**/*.tfvars"
       - ".github/workflows/ci-terraform.yml"
   push:
     branches:
       - main
     paths:
       - "**/*.tf"
+      - "**/*.tfvars"
       - ".github/workflows/ci-terraform.yml"
   workflow_dispatch:
     inputs:
@@ -55,6 +57,12 @@ jobs:
       - name: Validate configuration
         run: terraform validate
 
+      - name: Initialize Helm Terraform stack
+        run: terraform -chdir=helm init -backend=false
+
+      - name: Validate Helm Terraform stack
+        run: terraform -chdir=helm validate
+
   plan:
     name: Plan
     needs: validate
@@ -92,7 +100,7 @@ jobs:
           -backend-config="bucket=$TF_BACKEND_BUCKET" \
           -backend-config="region=$AWS_REGION"
 
-      - name: Generate plan
+      - name: Generate infrastructure plan
         run: terraform plan -input=false -out=tfplan
 
       - name: Generate plan checksum
@@ -170,6 +178,24 @@ jobs:
       - name: Apply approved plan
         run: terraform apply -input=false tfplan
 
+      - name: Wait for EKS cluster
+        run: |
+          cluster_name="$(terraform output -raw eks_cluster_name)"
+          aws eks wait cluster-active --region "$AWS_REGION" --name "$cluster_name"
+
+      - name: Initialize Helm Terraform stack
+        run: |
+          terraform -chdir=helm init -input=false \
+            -backend-config="bucket=$TF_BACKEND_BUCKET" \
+            -backend-config="region=$AWS_REGION"
+
+      - name: Plan and apply Helm releases
+        run: |
+          export TF_VAR_aws_region="$AWS_REGION"
+          export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
+          terraform -chdir=helm plan -input=false -out=helm.tfplan
+          terraform -chdir=helm apply -input=false helm.tfplan
+
   destroy:
     name: Destroy
     runs-on: ubuntu-latest
@@ -197,9 +223,6 @@ jobs:
         with:
           terraform_version: "1.16.0"
 
-      - name: Cleanup Load Balancers and K8s resources
-        run: bash scripts/cleanup_loadbalancers.sh "${{ env.AWS_REGION }}"
-
       - name: Ensure Terraform backend bucket exists
         run: bash scripts/create_backend_bucket.sh "$TF_BACKEND_BUCKET" "$AWS_REGION"
 
@@ -209,5 +232,26 @@ jobs:
           -backend-config="bucket=$TF_BACKEND_BUCKET" \
           -backend-config="region=$AWS_REGION"
 
-      - name: Destroy resources
+      - name: Destroy Helm releases before EKS
+        run: |
+          state_resources="$(terraform state list 2>/dev/null || true)"
+          if grep -q '^module\.eks\.' <<< "$state_resources"; then
+            cluster_name="$(terraform output -raw eks_cluster_name)"
+            if aws eks describe-cluster --name "$cluster_name" --region "$AWS_REGION" >/dev/null 2>&1; then
+              export TF_VAR_aws_region="$AWS_REGION"
+              export TF_VAR_eks_cluster_name="$cluster_name"
+              terraform -chdir=helm init -input=false \
+                -backend-config="bucket=$TF_BACKEND_BUCKET" \
+                -backend-config="region=$AWS_REGION"
+              helm_state="$(terraform -chdir=helm state list 2>/dev/null || true)"
+              if grep -q '^module\.helm\.' <<< "$helm_state"; then
+                terraform -chdir=helm destroy -auto-approve -input=false
+              fi
+            fi
+          fi
+
+      - name: Cleanup Load Balancers and Kubernetes resources
+        run: bash scripts/cleanup_loadbalancers.sh "${{ env.AWS_REGION }}"
+
+      - name: Destroy infrastructure
         run: terraform destroy -auto-approve -input=false

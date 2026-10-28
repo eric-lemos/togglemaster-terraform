@@ -28,6 +28,10 @@ networking = {
       availability_zone       = "us-east-1a"
       type                    = "public"
       map_public_ip_on_launch = true
+      tags = {
+        "kubernetes.io/cluster/togglemaster-eks-cluster" = "shared"
+        "kubernetes.io/role/elb"                         = "1"
+      }
     }
 
     public-b = {
@@ -36,6 +40,10 @@ networking = {
       availability_zone       = "us-east-1b"
       type                    = "public"
       map_public_ip_on_launch = true
+      tags = {
+        "kubernetes.io/cluster/togglemaster-eks-cluster" = "shared"
+        "kubernetes.io/role/elb"                         = "1"
+      }
     }
 
     private-eks-a = {

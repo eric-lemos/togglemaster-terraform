@@ -51,21 +51,35 @@ terraform plan
 terraform apply
 ```
 
-O stack Helm usa um state remoto independente (`helm/terraform.tfstate`) e instala
-Ingress NGINX, Metrics Server e Argo CD depois que o cluster EKS estiver disponível.
-Em execuções locais, aplique-o após `terraform apply`:
+O Helm é gerenciado por um stack Terraform separado, com state próprio
+(`helm/terraform.tfstate`), e instalado depois que o EKS estiver disponível.
+O workflow aplica a infraestrutura e os charts em sequência, com um único
+acionamento manual da pipeline. Para execução local, aplique os dois stacks:
 
 ```bash
+terraform apply
+
 export TF_VAR_aws_region="$AWS_REGION"
 export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
 terraform -chdir=helm init \
   -backend-config="bucket=$TF_BACKEND_BUCKET" \
   -backend-config="region=$AWS_REGION"
+terraform -chdir=helm plan
 terraform -chdir=helm apply
 ```
 
-Destrua o stack Helm antes da infraestrutura EKS. O workflow GitHub Actions faz
-essa ordenação automaticamente nos fluxos `Apply` e `Destroy`.
+O stack Helm instala Ingress NGINX, Metrics Server e Argo CD.
+O controller Ingress usa a classe `nginx` e um Service `LoadBalancer`; as subnets
+públicas recebem as tags AWS necessárias para descoberta pelo Kubernetes. O
+manifesto do GitOps encaminha os cinco serviços por prefixo de caminho. Não há
+hostname nem TLS configurados neste momento, então o acesso é feito pelo endereço
+do Load Balancer em HTTP. O provider Helm acessa o endpoint do EKS com AWS CLI,
+sem exigir kubeconfig local.
+
+O workflow GitHub Actions usa um único acionamento manual: aplica o plano de
+infraestrutura, espera o EKS ficar ativo e então inicializa, planeja e aplica o
+stack Helm separado. No destroy, remove os releases antes de limpar os Load
+Balancers e destruir o EKS.
 
 Para remover os recursos manualmente:
 
@@ -79,16 +93,52 @@ terraform -chdir=helm destroy
 terraform destroy
 ```
 
-Na primeira execução, `upgrade_install` assume releases Helm que já existiam e
-aplica as versões e configurações declaradas no módulo. Isso pode atualizar os
-charts e iniciar um rollout dos workloads.
+Se os releases já tiverem sido aplicados pelo stack raiz anterior, transfira
+o gerenciamento para o state separado antes de executar `terraform apply` na
+infraestrutura. Com o backend principal inicializado, importe cada release no
+stack Helm:
+
+```bash
+export TF_VAR_aws_region="$AWS_REGION"
+export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
+terraform -chdir=helm init \
+  -backend-config="bucket=$TF_BACKEND_BUCKET" \
+  -backend-config="region=$AWS_REGION"
+terraform -chdir=helm import \
+  'module.helm.helm_release.this["ingress-nginx"]' \
+  ingress-nginx/ingress-nginx
+terraform -chdir=helm import \
+  'module.helm.helm_release.this["metrics-server"]' \
+  kube-system/metrics-server
+terraform -chdir=helm import \
+  'module.helm.helm_release.this["argocd"]' \
+  argocd/argocd
+```
+
+Confirme que os releases aparecem com `terraform -chdir=helm state list`.
+Depois remova as referências correspondentes do state raiz sem desinstalá-los:
+
+```bash
+terraform state rm \
+  'module.helm.helm_release.this["ingress-nginx"]' \
+  'module.helm.helm_release.this["metrics-server"]' \
+  'module.helm.helm_release.this["argocd"]'
+```
+
+Faça a remoção apenas depois de confirmar os imports no state Helm.
+
+> **Atenção:** o Kubernetes aposentou o projeto Ingress NGINX em março de 2026;
+> não haverá novas correções ou atualizações de segurança. Esta configuração
+> mantém compatibilidade com os manifests atuais, mas para uso exposto à internet
+> planeje migrar para um controller mantido ou para Gateway API. Consulte o
+> [anúncio oficial de aposentadoria](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/).
 
 ## GitHub Actions
 
 O workflow em `.github/workflows/ci-terraform.yml` executa os jobs `Validate`, `Plan`, `Security`, `Apply` e `Destroy`.
 
 - `Validate`, `Plan` e `Security` rodam em pull requests e pushes para `main`.
-- `Apply` exige execução manual no branch `main`, com `apply=true`. Ele aplica o plano gerado no mesmo workflow após validar seu checksum SHA-256 e, em seguida, planeja/aplica os charts Helm.
+- `Apply` exige execução manual no branch `main`, com `apply=true`. Aplica o plano de infraestrutura e, em seguida, planeja/aplica o stack Helm separado no mesmo workflow.
 - `Destroy` exige execução manual no branch `main`, com `destroy=true`. Ele remove primeiro os releases Helm e depois a infraestrutura; os jobs `Validate`, `Plan`, `Security` e `Apply` são ignorados.
 
 Configure em **Settings > Secrets and variables > Actions**:

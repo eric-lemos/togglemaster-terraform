@@ -140,22 +140,6 @@ variable "eks" {
   })
 }
 
-# variable "helm" {
-#   description = "Helm releases to install after the EKS cluster is available."
-
-#   type = object({
-#     packages = map(object({
-#       name       = optional(string)
-#       enabled    = optional(bool, true)
-#       repository = string
-#       chart      = string
-#       version    = optional(string)
-#       namespace  = optional(string, "default")
-#       values     = optional(map(any), {})
-#     }))
-#   })
-# }
-
 variable "rds" {
   description = "RDS configuration (subnet group and DB instances). Subnet ids and security group ids are wired from other modules' outputs."
 

@@ -17,13 +17,6 @@ module "eks" {
   security_group_ids = module.security_group.security_group_ids
 }
 
-# module "helm" {
-#   source = "./modules/helm"
-#   helm   = var.helm
-
-#   depends_on = [module.eks]
-# }
-
 module "rds" {
   source             = "./modules/rds"
   rds                = var.rds

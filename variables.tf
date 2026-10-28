@@ -214,15 +214,9 @@ variable "rds_instance_passwords" {
   validation {
     condition = alltrue([
       for k in keys(var.rds.instances) :
-      contains(keys(var.rds_instance_passwords), k)
+      contains(nonsensitive(keys(var.rds_instance_passwords)), k)
     ])
-    error_message = format(
-      "rds_instance_passwords must provide a password for every key defined in rds.instances. Missing keys: %s.",
-      join(", ", [
-        for k in keys(var.rds.instances) :
-        k if !contains(keys(var.rds_instance_passwords), k)
-      ])
-    )
+    error_message = "rds_instance_passwords must provide a password for every key defined in rds.instances."
   }
 
   validation {

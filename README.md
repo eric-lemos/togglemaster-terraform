@@ -15,7 +15,7 @@ Crie o arquivo `secrets.auto.tfvars`, que é ignorado pelo Git, com uma senha pa
 ```hcl
 rds_instance_passwords = {
   auth       = "REPLACE_WITH_A_STRONG_PASSWORD"
-  evaluation = "REPLACE_WITH_A_STRONG_PASSWORD"
+  targeting  = "REPLACE_WITH_A_STRONG_PASSWORD"
   flags      = "REPLACE_WITH_A_STRONG_PASSWORD"
 }
 ```
@@ -89,7 +89,7 @@ TF_VAR_RDS_INSTANCE_PASSWORDS
 `AWS_SESSION_TOKEN` é obrigatório apenas para credenciais temporárias. O secret `TF_VAR_RDS_INSTANCE_PASSWORDS` deve ser um objeto JSON em uma única linha:
 
 ```json
-{"auth":"REPLACE_WITH_A_STRONG_PASSWORD","evaluation":"REPLACE_WITH_A_STRONG_PASSWORD","flags":"REPLACE_WITH_A_STRONG_PASSWORD"}
+{"auth":"REPLACE_WITH_A_STRONG_PASSWORD","targeting":"REPLACE_WITH_A_STRONG_PASSWORD","flags":"REPLACE_WITH_A_STRONG_PASSWORD"}
 ```
 
-O prefixo `TF_VAR_` faz o Terraform disponibilizar o conteúdo como a variável `rds_instance_passwords`. Nunca versione `secrets.auto.tfvars` nem coloque senhas reais no repositório.
+As chaves precisam corresponder exatamente às instâncias definidas em `rds.instances`: `auth`, `targeting` e `flags`. O prefixo `TF_VAR_` faz o Terraform disponibilizar o conteúdo como a variável `rds_instance_passwords`. Nunca versione `secrets.auto.tfvars` nem coloque senhas reais no repositório.

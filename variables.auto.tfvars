@@ -226,15 +226,15 @@ rds = {
       security_group_keys = ["rds"]
     }
 
-    targeting = {
-      identifier          = "togglemaster-targeting"
-      username            = "targeting_admin"
-      security_group_keys = ["rds"]
-    }
-
     flags = {
       identifier          = "togglemaster-flags"
       username            = "flags_admin"
+      security_group_keys = ["rds"]
+    }
+
+    targeting = {
+      identifier          = "togglemaster-targeting"
+      username            = "targeting_admin"
       security_group_keys = ["rds"]
     }
   }

@@ -18,12 +18,12 @@ Para execução local, crie `secrets.auto.tfvars`:
 ```hcl
 rds_instance_passwords = {
   auth       = "REPLACE_WITH_A_STRONG_PASSWORD"
-  evaluation = "REPLACE_WITH_A_STRONG_PASSWORD"
+  targeting  = "REPLACE_WITH_A_STRONG_PASSWORD"
   flags      = "REPLACE_WITH_A_STRONG_PASSWORD"
 }
 ```
 
-Na CI, configure o GitHub Secret `TF_VAR_RDS_INSTANCE_PASSWORDS` como JSON em uma linha, com as mesmas chaves. As senhas devem ter pelo menos oito caracteres e não podem conter `/`, `@`, aspas duplas ou espaços.
+Na CI, configure o GitHub Secret `TF_VAR_RDS_INSTANCE_PASSWORDS` como JSON em uma linha, usando exatamente as chaves `auth`, `targeting` e `flags`, correspondentes a `rds.instances`. As senhas devem ter pelo menos oito caracteres e não podem conter `/`, `@`, aspas duplas ou espaços.
 
 ## Saídas
 

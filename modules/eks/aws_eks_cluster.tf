@@ -1,6 +1,6 @@
 resource "aws_eks_cluster" "this" {
   name     = var.eks.cluster.name
-  role_arn = var.eks.iam.cluster_role_arn
+  role_arn = data.aws_iam_role.cluster.arn
   version  = var.eks.cluster.kubernetes_version
 
   access_config {

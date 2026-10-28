@@ -29,5 +29,6 @@ override.tf.json
 
 # Terraform lock and CLI config
 .terraform.lock.hcl
+!helm/.terraform.lock.hcl
 .terraformrc
 terraform.rc

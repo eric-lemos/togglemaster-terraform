@@ -1,9 +1,16 @@
+data "aws_rds_engine_version" "postgres_16" {
+  engine       = "postgres"
+  version      = "16"
+  latest       = true
+  default_only = true
+}
+
 resource "aws_db_instance" "this" {
   for_each = var.rds.instances
 
   identifier     = coalesce(each.value.identifier, each.key)
   engine         = each.value.engine
-  engine_version = each.value.engine_version
+  engine_version = coalesce(each.value.engine_version, data.aws_rds_engine_version.postgres_16.version)
   instance_class = each.value.instance_class
 
   allocated_storage = each.value.allocated_storage

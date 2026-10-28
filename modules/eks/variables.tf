@@ -16,8 +16,8 @@ variable "eks" {
     })
 
     iam = object({
-      cluster_role_arn = string
-      node_role_arn    = string
+      cluster_role_name = string
+      node_role_name    = string
     })
 
     node_groups = optional(map(object({

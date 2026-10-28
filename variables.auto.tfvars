@@ -182,8 +182,8 @@ security_groups = {
 # -------------------------------------------
 eks = {
   iam = {
-    cluster_role_arn = "arn:aws:iam::031488046339:role/LabRole"
-    node_role_arn    = "arn:aws:iam::031488046339:role/LabRole"
+    cluster_role_name = "LabRole"
+    node_role_name    = "LabRole"
   }
 
   cluster = {
@@ -317,4 +317,3 @@ ecr = {
     }
   }
 }
-

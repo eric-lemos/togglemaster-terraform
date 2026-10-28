@@ -11,7 +11,7 @@ variable "rds" {
     instances = map(object({
       identifier                   = optional(string)
       engine                       = optional(string, "postgres")
-      engine_version               = optional(string, "16.4")
+      engine_version               = optional(string)
       instance_class               = optional(string, "db.t3.micro")
       allocated_storage            = optional(number, 20)
       storage_encrypted            = optional(bool, true)

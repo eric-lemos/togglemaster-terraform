@@ -2,6 +2,10 @@
 
 Cria um DB subnet group e instâncias Amazon RDS PostgreSQL.
 
+Se `engine_version` não for informado numa instância, o módulo consulta a versão
+padrão disponível mais recente do PostgreSQL 16 na região do provider. É possível
+fixar uma versão explicitamente na configuração daquela instância.
+
 ## Entradas
 
 | Variável             | Descrição                                            |

@@ -7,6 +7,8 @@ Infraestrutura AWS do ToggleMaster, provisionada com Terraform 1.16.0. O estado 
 - Terraform 1.16.0
 - AWS CLI autenticada em uma conta AWS com as permissões necessárias
 - Bash, para executar o script de backend
+- Uma IAM role chamada `LabRole` (ou os nomes configurados em `eks.iam`) na mesma
+  conta das credenciais AWS, com trust relationship e permissões exigidas pelo EKS.
 
 ## Execução local
 
@@ -49,19 +51,45 @@ terraform plan
 terraform apply
 ```
 
-Para remover os recursos:
+O stack Helm usa um state remoto independente (`helm/terraform.tfstate`) e instala
+Ingress NGINX, Metrics Server e Argo CD depois que o cluster EKS estiver disponível.
+Em execuções locais, aplique-o após `terraform apply`:
 
 ```bash
+export TF_VAR_aws_region="$AWS_REGION"
+export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
+terraform -chdir=helm init \
+  -backend-config="bucket=$TF_BACKEND_BUCKET" \
+  -backend-config="region=$AWS_REGION"
+terraform -chdir=helm apply
+```
+
+Destrua o stack Helm antes da infraestrutura EKS. O workflow GitHub Actions faz
+essa ordenação automaticamente nos fluxos `Apply` e `Destroy`.
+
+Para remover os recursos manualmente:
+
+```bash
+export TF_VAR_aws_region="$AWS_REGION"
+export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
+terraform -chdir=helm init \
+  -backend-config="bucket=$TF_BACKEND_BUCKET" \
+  -backend-config="region=$AWS_REGION"
+terraform -chdir=helm destroy
 terraform destroy
 ```
+
+Na primeira execução, `upgrade_install` assume releases Helm que já existiam e
+aplica as versões e configurações declaradas no módulo. Isso pode atualizar os
+charts e iniciar um rollout dos workloads.
 
 ## GitHub Actions
 
 O workflow em `.github/workflows/ci-terraform.yml` executa os jobs `Validate`, `Plan`, `Security`, `Apply` e `Destroy`.
 
 - `Validate`, `Plan` e `Security` rodam em pull requests e pushes para `main`.
-- `Apply` exige execução manual no branch `main`, com `apply=true`. Ele aplica o plano gerado no mesmo workflow após validar seu checksum SHA-256.
-- `Destroy` exige execução manual no branch `main`, com `DESTROY=true`. Nesse modo, os jobs `Validate`, `Plan`, `Security` e `Apply` são ignorados.
+- `Apply` exige execução manual no branch `main`, com `apply=true`. Ele aplica o plano gerado no mesmo workflow após validar seu checksum SHA-256 e, em seguida, planeja/aplica os charts Helm.
+- `Destroy` exige execução manual no branch `main`, com `destroy=true`. Ele remove primeiro os releases Helm e depois a infraestrutura; os jobs `Validate`, `Plan`, `Security` e `Apply` são ignorados.
 
 Configure em **Settings > Secrets and variables > Actions**:
 
@@ -76,6 +104,16 @@ O workflow gera `TF_BACKEND_BUCKET` dinamicamente usando a conta autenticada e
 `TF_BACKEND_BUCKET` antiga existir nas Actions, ela não será mais usada.
 Um bucket já pertencente à sua conta será reutilizado e terá versionamento,
 criptografia e bloqueio de acesso público verificados/configurados pelo script.
+
+As roles do EKS são resolvidas pelos nomes `cluster_role_name` e `node_role_name`
+em `variables.auto.tfvars`, dentro da conta das credenciais utilizadas pelo
+workflow. Isso evita passar uma ARN de role de outra conta. A role precisa
+permitir o serviço EKS assumi-la, ter as políticas necessárias e ser passável
+pela identidade AWS do workflow.
+
+Por padrão, o módulo RDS busca na região selecionada a versão padrão disponível
+mais recente do PostgreSQL 16. Também é possível informar `engine_version`
+explicitamente em cada instância RDS.
 
 ### Secrets
 

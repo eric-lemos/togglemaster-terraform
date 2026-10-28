@@ -121,8 +121,8 @@ variable "eks" {
     })
 
     iam = object({
-      cluster_role_arn = string
-      node_role_arn    = string
+      cluster_role_name = string
+      node_role_name    = string
     })
 
     node_groups = optional(map(object({
@@ -169,7 +169,7 @@ variable "rds" {
     instances = map(object({
       identifier                   = optional(string)
       engine                       = optional(string, "postgres")
-      engine_version               = optional(string, "16.4")
+      engine_version               = optional(string)
       instance_class               = optional(string, "db.t3.micro")
       allocated_storage            = optional(number, 20)
       storage_encrypted            = optional(bool, true)
@@ -202,6 +202,14 @@ variable "rds" {
       can(regex("^[A-Za-z][A-Za-z0-9]*$", i.db_name))
     ])
     error_message = "rds.instances.*.db_name must start with a letter and contain only alphanumeric characters."
+  }
+
+  validation {
+    condition = alltrue([
+      for i in values(var.rds.instances) :
+      i.engine == "postgres" || i.engine_version != null
+    ])
+    error_message = "rds.instances must specify engine_version for engines other than postgres."
   }
 }
 

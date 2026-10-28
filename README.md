@@ -105,13 +105,13 @@ terraform -chdir=helm init \
   -backend-config="bucket=$TF_BACKEND_BUCKET" \
   -backend-config="region=$AWS_REGION"
 terraform -chdir=helm import \
-  'module.helm.helm_release.this["ingress-nginx"]' \
+  'helm_release.this["ingress-nginx"]' \
   ingress-nginx/ingress-nginx
 terraform -chdir=helm import \
-  'module.helm.helm_release.this["metrics-server"]' \
+  'helm_release.this["metrics-server"]' \
   kube-system/metrics-server
 terraform -chdir=helm import \
-  'module.helm.helm_release.this["argocd"]' \
+  'helm_release.this["argocd"]' \
   argocd/argocd
 ```
 

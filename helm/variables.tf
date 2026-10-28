@@ -20,7 +20,7 @@ variable "helm" {
       chart           = string
       version         = optional(string)
       namespace       = optional(string, "default")
-      values          = optional(map(any), {})
+      values          = optional(any, {})
     }))
   })
 }

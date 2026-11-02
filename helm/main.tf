@@ -17,7 +17,15 @@ resource "helm_release" "this" {
   wait            = true
   timeout         = 600
 
-  values = [yamlencode(lookup(var.helm.packages[each.key], "values", {}))]
+  values = concat(
+    [yamlencode(lookup(var.helm.packages[each.key], "values", {}))],
+    [
+      for values_file in lookup(var.helm.packages[each.key], "values_files", []) :
+      templatefile("${path.module}/${values_file}", {
+        togglemaster_dashboard = jsonencode(file("${path.module}/dashboards/togglemaster.json"))
+      })
+    ]
+  )
 }
 
 output "release_statuses" {

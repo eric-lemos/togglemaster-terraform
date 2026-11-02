@@ -1,0 +1,74 @@
+fullnameOverride: monitoring
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    retentionSize: 2GB
+    scrapeInterval: 30s
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    additionalScrapeConfigs:
+      - job_name: otel-application-metrics
+        static_configs:
+          - targets:
+              - otel-gateway.observability.svc.cluster.local:8889
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+grafana:
+  adminPassword: null
+  persistence:
+    enabled: false
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  sidecar:
+    datasources:
+      uid: prometheus
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.observability.svc.cluster.local:3100
+      isDefault: false
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: togglemaster
+          orgId: 1
+          folder: ToggleMaster
+          type: file
+          disableDeletion: false
+          editable: false
+          options:
+            path: /var/lib/grafana/dashboards/togglemaster
+  dashboards:
+    togglemaster:
+      ecosystem:
+        json: ${togglemaster_dashboard}

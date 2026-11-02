@@ -5,6 +5,7 @@ on:
     paths:
       - "**/*.tf"
       - "**/*.tfvars"
+      - "helm/**"
       - ".github/workflows/ci-terraform.yml"
   push:
     branches:
@@ -12,6 +13,7 @@ on:
     paths:
       - "**/*.tf"
       - "**/*.tfvars"
+      - "helm/**"
       - ".github/workflows/ci-terraform.yml"
   workflow_dispatch:
     inputs:
@@ -62,6 +64,9 @@ jobs:
 
       - name: Validate Helm Terraform stack
         run: terraform -chdir=helm validate
+
+      - name: Test Helm observability configuration
+        run: terraform -chdir=helm test
 
   plan:
     name: Plan

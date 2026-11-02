@@ -68,7 +68,8 @@ terraform -chdir=helm plan
 terraform -chdir=helm apply
 ```
 
-O stack Helm instala Ingress NGINX, Metrics Server e Argo CD.
+O stack Helm instala Ingress NGINX, Metrics Server, Argo CD e a stack de
+observabilidade descrita abaixo.
 O controller Ingress usa a classe `nginx` e um Service `LoadBalancer`; as subnets
 públicas recebem as tags AWS necessárias para descoberta pelo Kubernetes. O
 manifesto do GitOps encaminha os cinco serviços por prefixo de caminho. Não há
@@ -132,6 +133,90 @@ Faça a remoção apenas depois de confirmar os imports no state Helm.
 > mantém compatibilidade com os manifests atuais, mas para uso exposto à internet
 > planeje migrar para um controller mantido ou para Gateway API. Consulte o
 > [anúncio oficial de aposentadoria](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/).
+
+## Observabilidade no laboratorio
+
+As quatro releases sao gerenciadas exclusivamente pelo Terraform no state Helm,
+nao pelo Argo CD. Essa escolha reaproveita o gerenciamento dos pacotes existentes.
+O guia academico menciona tanto codigo IaC/GitOps quanto charts no repositorio
+GitOps: documente essa decisao no relatorio e confirme a interpretacao com o
+professor. Nao crie Applications Argo CD para gerenciar as mesmas releases.
+
+| Release | Chart fixado | Funcao |
+| --- | --- | --- |
+| `monitoring` | `kube-prometheus-stack` 92.17.0 | Prometheus, Alertmanager, Grafana e metricas Kubernetes |
+| `loki` | `loki` 7.5.0 | Logs via OTLP, SingleBinary com uma replica |
+| `otel-agent` | `opentelemetry-collector` 0.178.2 | DaemonSet que coleta stdout/stderr dos containers |
+| `otel-gateway` | `opentelemetry-collector` 0.178.2 | Recebe OTLP e encaminha logs e metricas |
+
+As configuracoes ficam em [helm/values](helm/values), e o dashboard versionado
+em [helm/dashboards/togglemaster.json](helm/dashboards/togglemaster.json).
+O Collector Contrib usa a imagem fixada em 0.163.2. Os agentes excluem seus
+proprios logs para evitar realimentacao. A coleta comeca no final dos arquivos:
+gere novas requisicoes para visualizar logs depois da instalacao.
+
+Fluxo: logs dos containers -> agente -> gateway -> Loki. As futuras metricas
+OTLP das aplicacoes serao expostas pelo gateway na porta 8889 e coletadas pelo
+Prometheus. As metricas nativas do cluster sao coletadas diretamente pelo
+Prometheus. As portas OTLP internas do gateway sao 4317 (gRPC) e 4318 (HTTP).
+O pipeline de traces fica desativado ate configurar o APM comercial.
+
+O dashboard "ToggleMaster - Ecosystem", na pasta ToggleMaster, mostra CPU,
+memoria, reinicios e logs. O painel HTTP depende da futura instrumentacao OTel,
+com a metrica `http.server.request.duration` em segundos e `service.name`;
+ficara sem dados ate essa etapa. Alertmanager esta instalado, mas ainda nao
+ha integracao de incidentes, ChatOps nem self-healing.
+
+**Armazenamento efemero:** nao sao criados PVCs. Prometheus tem retencao de
+3 dias limitada a 2 GB; Loki tem retencao de 72 horas. Recriar pods de
+armazenamento perde o historico, e alterar configuracoes/usuarios no Grafana
+pela interface nao garante persistencia. Configuracoes versionadas sao
+recriadas. Essa stack nao e uma instalacao de producao nem de alta disponibilidade.
+Verifique CPU, memoria e disco livres nos nos antes do apply; os limites sao
+iniciais para laboratorio, nao uma garantia de capacidade no EKS.
+
+Todos os novos Services sao internos. Loki e OTLP nao usam autenticacao nem TLS
+internamente; nao os exponha publicamente. A senha inicial do Grafana e gerada
+pelo chart, sem senha fixa no Git. Nao publique a senha nem outputs de Secrets.
+
+Instale usando o fluxo `terraform -chdir=helm plan/apply` descrito acima.
+Para inspecionar o cluster, atualize antes o kubeconfig:
+
+```bash
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$TF_VAR_eks_cluster_name"
+kubectl get nodes
+kubectl top nodes
+kubectl -n observability get pods,svc,pvc
+kubectl -n observability rollout status deployment/otel-gateway
+kubectl -n observability rollout status daemonset/otel-agent
+kubectl -n observability logs deployment/otel-gateway --tail=50
+kubectl -n observability logs daemonset/otel-agent --tail=50
+```
+
+Acesse o Grafana localmente:
+
+```bash
+kubectl -n observability get secret monitoring-grafana \
+  -o jsonpath='{.data.admin-password}' | base64 --decode; echo
+kubectl -n observability port-forward svc/monitoring-grafana 3000:80
+```
+
+Abra `http://localhost:3000`, usuario `admin`. Confira os datasources Prometheus
+e Loki, o dashboard e os targets Prometheus. Consulte no Loki
+`{k8s_namespace_name="togglemaster"}` depois de gerar novas requisicoes.
+A porta 8889 so apresenta metricas de aplicacao apos receber dados OTLP;
+nao confunda um target acessivel com a instrumentacao concluida.
+
+Validacao local sem acesso ao cluster:
+
+```bash
+terraform -chdir=helm init -backend=false
+terraform -chdir=helm validate
+terraform -chdir=helm test
+```
+
+Os testes usam providers simulados e verificam releases, dashboard, endpoints,
+armazenamento e preservacao dos pacotes existentes. Nao instalam nada no EKS.
 
 ## GitHub Actions
 

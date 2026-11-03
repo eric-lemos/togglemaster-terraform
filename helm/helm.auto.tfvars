@@ -42,6 +42,11 @@ helm = {
         controller = {
           ingressClass             = "nginx"
           watchIngressWithoutClass = false
+          # Releases são instaladas em paralelo; o webhook de validação ainda
+          # não tem CA válida quando o monitoring cria seus Ingress.
+          admissionWebhooks = {
+            enabled = false
+          }
           ingressClassResource = {
             enabled = true
             name    = "nginx"

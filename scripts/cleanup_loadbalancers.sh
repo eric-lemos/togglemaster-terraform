@@ -33,6 +33,7 @@ if aws eks describe-cluster --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" >/
         kubectl delete namespace ingress-nginx --ignore-not-found --timeout=60s || true
         kubectl delete namespace argocd --ignore-not-found --timeout=60s || true
         kubectl delete namespace togglemaster --ignore-not-found --timeout=60s || true
+        kubectl delete namespace observability --ignore-not-found --timeout=60s || true
     else
         echo "WARN: kubectl não instalado. Tentando limpeza direta via AWS CLI..."
     fi

@@ -249,7 +249,7 @@ jobs:
                 -backend-config="bucket=$TF_BACKEND_BUCKET" \
                 -backend-config="region=$AWS_REGION"
               helm_state="$(terraform -chdir=helm state list 2>/dev/null || true)"
-              if grep -q '^module\.helm\.' <<< "$helm_state"; then
+              if [[ -n "$helm_state" ]]; then
                 terraform -chdir=helm destroy -auto-approve -input=false
               fi
             fi

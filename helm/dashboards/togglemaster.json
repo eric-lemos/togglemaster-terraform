@@ -88,7 +88,7 @@
     },
     {
       "id": 4,
-      "title": "HTTP requests per second (requires OTel instrumentation)",
+      "title": "HTTP requests per second",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",

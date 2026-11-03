@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Remove resíduos de rede que impedem a exclusão de subnets e security groups
 # depois de uma falha do terraform destroy (ENIs órfãs e SGs k8s-elb-* criados
-# pelo cloud-controller do Kubernetes, que não estão no state do Terraform).
+# pelo cloud-controller do Kubernetes e eks-cluster-sg-* criado pelo EKS, que
+# não estão no state do Terraform).
 
 set -Euo pipefail
 
@@ -39,7 +40,7 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 K8S_SGS=$(aws ec2 describe-security-groups --region "$AWS_REGION" \
-    --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=k8s-elb-*" \
+    --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=k8s-elb-*,eks-cluster-sg-*" \
     --query 'SecurityGroups[*].GroupId' --output text 2>/dev/null || true)
 
 ALL_SGS=$(aws ec2 describe-security-groups --region "$AWS_REGION" \

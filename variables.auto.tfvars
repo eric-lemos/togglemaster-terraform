@@ -204,18 +204,18 @@ eks = {
     bootstrap_cluster_creator_admin_permissions = true
   }
 
-  # node_groups = {
-  #   ng1 = {
-  #     name                = "togglemaster-eks-ng1"
-  #     security_group_keys = ["eks-cluster"]
-  #     min_size            = 1
-  #     max_size            = 4
-  #     desired_size        = 3
-  #     ami_type            = "AL2023_x86_64_STANDARD"
-  #     instance_types      = ["t3.medium"]
-  #     disk_size           = 20
-  #   }
-  # }
+  node_groups = {
+    ng1 = {
+      name                = "togglemaster-eks-ng1"
+      security_group_keys = ["eks-cluster"]
+      min_size            = 1
+      max_size            = 4
+      desired_size        = 3
+      ami_type            = "AL2023_x86_64_STANDARD"
+      instance_types      = ["t3.medium"]
+      disk_size           = 20
+    }
+  }
 }
 
 # -------------------------------------------

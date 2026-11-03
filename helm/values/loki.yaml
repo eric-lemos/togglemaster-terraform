@@ -38,6 +38,14 @@ singleBinary:
   replicas: 1
   persistence:
     enabled: false
+  # The chart mounts no data volume without persistence, and the root filesystem is read-only.
+  extraVolumes:
+    - name: storage
+      emptyDir:
+        sizeLimit: 2Gi
+  extraVolumeMounts:
+    - name: storage
+      mountPath: /var/loki
   resources:
     requests:
       cpu: 100m

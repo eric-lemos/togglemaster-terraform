@@ -90,6 +90,8 @@ alertmanager:
         memory: 128Mi
 grafana:
   adminPassword: null
+  serviceMonitor:
+    path: /grafana/metrics
   persistence:
     enabled: false
   service:

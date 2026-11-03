@@ -27,9 +27,10 @@ resource "helm_release" "this" {
     [
       for values_file in lookup(var.helm.packages[each.key], "values_files", []) :
       templatefile("${path.module}/${values_file}", {
-        togglemaster_dashboard = jsonencode(file("${path.module}/dashboards/togglemaster.json"))
-        monitoring_ui_password = random_password.monitoring_ui.result
-        monitoring_basic_auth  = "admin:${random_password.monitoring_ui.bcrypt_hash}"
+        togglemaster_dashboard   = jsonencode(file("${path.module}/dashboards/togglemaster.json"))
+        otel_collector_dashboard = jsonencode(file("${path.module}/dashboards/otel-collector.json"))
+        monitoring_ui_password   = random_password.monitoring_ui.result
+        monitoring_basic_auth    = "admin:${random_password.monitoring_ui.bcrypt_hash}"
       })
     ]
   )

@@ -167,6 +167,12 @@ com a metrica `http.server.request.duration` em segundos e `service.name`;
 ficara sem dados ate essa etapa. Alertmanager esta instalado, mas ainda nao
 ha integracao de incidentes, ChatOps nem self-healing.
 
+O dashboard "ToggleMaster - OTel Collector" mostra a saude do pipeline: collectors
+ativos, logs e metricas recebidos e enviados, falhas, fila do exporter, memoria
+e CPU. Os dados vem das metricas internas dos collectors (porta 8888), coletadas
+pelo job `otel-collector-internal` do Prometheus. Detalhes tecnicos de cada
+collector tambem podem ser vistos em `/prometheus/targets`.
+
 **Armazenamento efemero:** nao sao criados PVCs. Prometheus tem retencao de
 3 dias limitada a 2 GB; Loki tem retencao de 72 horas. Recriar pods de
 armazenamento perde o historico, e alterar configuracoes/usuarios no Grafana

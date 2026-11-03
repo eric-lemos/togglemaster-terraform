@@ -48,6 +48,24 @@ prometheus:
         static_configs:
           - targets:
               - otel-gateway.observability.svc.cluster.local:8889
+      # Métricas internas do collector (porta 8888 do pod, não declarada no chart)
+      - job_name: otel-collector-internal
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [observability]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: opentelemetry-collector
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: (.+)
+            replacement: $1:8888
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_instance]
+            target_label: collector
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
 alertmanager:
   ingress:
     enabled: true
@@ -120,3 +138,5 @@ grafana:
     togglemaster:
       ecosystem:
         json: ${togglemaster_dashboard}
+      otel-collector:
+        json: ${otel_collector_dashboard}

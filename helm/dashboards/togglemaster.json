@@ -31,7 +31,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"togglemaster\",pod=~\"$pod\",container!=\"\",container!=\"POD\"}[5m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"togglemaster\",container=~\"$app\",container!=\"\",container!=\"POD\"}[5m]))",
           "legendFormat": "{{container}}"
         }
       ]
@@ -59,7 +59,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (container) (container_memory_working_set_bytes{namespace=\"togglemaster\",pod=~\"$pod\",container!=\"\",container!=\"POD\"})",
+          "expr": "sum by (container) (container_memory_working_set_bytes{namespace=\"togglemaster\",container=~\"$app\",container!=\"\",container!=\"POD\"})",
           "legendFormat": "{{container}}"
         }
       ]
@@ -81,7 +81,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (container) (increase(kube_pod_container_status_restarts_total{namespace=\"togglemaster\",pod=~\"$pod\"}[30m]))",
+          "expr": "sum by (container) (increase(kube_pod_container_status_restarts_total{namespace=\"togglemaster\",container=~\"$app\"}[30m]))",
           "legendFormat": "{{container}}"
         }
       ]
@@ -103,7 +103,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\".*-service\"}[5m]))",
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$app\"}[5m]))",
           "legendFormat": "{{service_name}}"
         }
       ]
@@ -125,7 +125,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{k8s_namespace_name=\"togglemaster\"} | k8s_pod_name=~\"$pod\" |~ `(?i)${search:regex}`",
+          "expr": "{k8s_namespace_name=\"togglemaster\", k8s_container_name=~\"$app\"} |~ `(?i)${search:regex}`",
           "queryType": "range"
         }
       ],
@@ -140,23 +140,23 @@
   "templating": {
     "list": [
       {
-        "name": "pod",
-        "label": "Pod",
+        "name": "app",
+        "label": "App",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(kube_pod_info{namespace=\"togglemaster\"}, pod)",
-          "refId": "PodVariable"
+          "query": "label_values(kube_pod_container_info{namespace=\"togglemaster\"}, container)",
+          "refId": "AppVariable"
         },
-        "definition": "label_values(kube_pod_info{namespace=\"togglemaster\"}, pod)",
+        "definition": "label_values(kube_pod_container_info{namespace=\"togglemaster\"}, container)",
         "refresh": 2,
         "sort": 1,
         "multi": true,
         "includeAll": true,
-        "allValue": ".+",
+        "allValue": ".*-service",
         "current": {
           "selected": true,
           "text": [

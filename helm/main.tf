@@ -1,3 +1,8 @@
+resource "random_password" "monitoring_ui" {
+  length  = 24
+  special = false
+}
+
 resource "helm_release" "this" {
   for_each = {
     for package_key in keys(var.helm.packages) : package_key => package_key
@@ -23,6 +28,8 @@ resource "helm_release" "this" {
       for values_file in lookup(var.helm.packages[each.key], "values_files", []) :
       templatefile("${path.module}/${values_file}", {
         togglemaster_dashboard = jsonencode(file("${path.module}/dashboards/togglemaster.json"))
+        monitoring_ui_password = random_password.monitoring_ui.result
+        monitoring_basic_auth  = "admin:${random_password.monitoring_ui.bcrypt_hash}"
       })
     ]
   )

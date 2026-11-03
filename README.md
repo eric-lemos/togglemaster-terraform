@@ -175,9 +175,20 @@ recriadas. Essa stack nao e uma instalacao de producao nem de alta disponibilida
 Verifique CPU, memoria e disco livres nos nos antes do apply; os limites sao
 iniciais para laboratorio, nao uma garantia de capacidade no EKS.
 
-Todos os novos Services sao internos. Loki e OTLP nao usam autenticacao nem TLS
-internamente; nao os exponha publicamente. A senha inicial do Grafana e gerada
-pelo chart, sem senha fixa no Git. Nao publique a senha nem outputs de Secrets.
+Loki e OTLP continuam apenas como Services internos, sem autenticacao nem TLS;
+nao os exponha publicamente. Grafana, Prometheus e Alertmanager sao publicados
+por caminho no mesmo ingress nginx dos microservicos, em HTTP:
+
+| Caminho | Autenticacao |
+| --- | --- |
+| `/grafana/` | Login do Grafana (`admin`, senha gerada pelo chart) |
+| `/prometheus/` | Basic auth do nginx (`admin`, senha gerada pelo Terraform) |
+| `/alertmanager/` | Basic auth do nginx (mesma credencial do Prometheus) |
+
+A senha do basic auth e gerada por `random_password` e fica no state Helm e no
+Secret `monitoring-ui-basic-auth` (hash bcrypt na chave `auth`). Nenhuma senha
+fica no Git. Como nao ha TLS, use a exposicao apenas no laboratorio e nao
+publique senhas nem outputs de Secrets.
 
 Instale usando o fluxo `terraform -chdir=helm plan/apply` descrito acima.
 Para inspecionar o cluster, atualize antes o kubeconfig:
@@ -193,15 +204,26 @@ kubectl -n observability logs deployment/otel-gateway --tail=50
 kubectl -n observability logs daemonset/otel-agent --tail=50
 ```
 
-Acesse o Grafana localmente:
+Acesse pelo navegador usando o endereco do ingress:
 
 ```bash
+INGRESS=$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "http://$INGRESS/grafana/"
+echo "http://$INGRESS/prometheus/"
+echo "http://$INGRESS/alertmanager/"
 kubectl -n observability get secret monitoring-grafana \
   -o jsonpath='{.data.admin-password}' | base64 --decode; echo
-kubectl -n observability port-forward svc/monitoring-grafana 3000:80
+kubectl -n observability get secret monitoring-ui-basic-auth \
+  -o jsonpath='{.data.password}' | base64 --decode; echo
 ```
 
-Abra `http://localhost:3000`, usuario `admin`. Confira os datasources Prometheus
+O primeiro comando de senha e o login do Grafana; o segundo e o basic auth de
+Prometheus e Alertmanager. Port-forward continua disponivel; no WSL use
+`kubectl -n observability port-forward svc/monitoring-grafana 3000:80 --address 0.0.0.0`
+para abrir `http://localhost:3000` no navegador do Windows.
+
+No Grafana, confira os datasources Prometheus
 e Loki, o dashboard e os targets Prometheus. Consulte no Loki
 `{k8s_namespace_name="togglemaster"}` depois de gerar novas requisicoes.
 A porta 8889 so apresenta metricas de aplicacao apos receber dados OTLP;

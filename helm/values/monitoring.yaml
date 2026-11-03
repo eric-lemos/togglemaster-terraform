@@ -7,8 +7,32 @@ kubeScheduler:
   enabled: false
 kubeProxy:
   enabled: false
+extraManifests:
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: monitoring-ui-basic-auth
+    type: Opaque
+    stringData:
+      auth: ${jsonencode(monitoring_basic_auth)}
+      username: admin
+      password: ${jsonencode(monitoring_ui_password)}
 prometheus:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: monitoring-ui-basic-auth
+      nginx.ingress.kubernetes.io/auth-realm: ToggleMaster Observability
+    hosts: []
+    paths:
+      - /prometheus
+    pathType: Prefix
   prometheusSpec:
+    routePrefix: /prometheus
+    # Prometheus redirects its UI root using the externalUrl path, so it must carry the prefix.
+    externalUrl: http://monitoring-prometheus.observability:9090/prometheus
     retention: 3d
     retentionSize: 2GB
     scrapeInterval: 30s
@@ -25,7 +49,20 @@ prometheus:
           - targets:
               - otel-gateway.observability.svc.cluster.local:8889
 alertmanager:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: monitoring-ui-basic-auth
+      nginx.ingress.kubernetes.io/auth-realm: ToggleMaster Observability
+    hosts: []
+    paths:
+      - /alertmanager
+    pathType: Prefix
   alertmanagerSpec:
+    routePrefix: /alertmanager
+    externalUrl: http://monitoring-alertmanager.observability:9093/alertmanager
     resources:
       requests:
         cpu: 50m
@@ -39,6 +76,16 @@ grafana:
     enabled: false
   service:
     type: ClusterIP
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts: []
+    path: /grafana
+    pathType: Prefix
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana/"
+      serve_from_sub_path: true
   resources:
     requests:
       cpu: 100m

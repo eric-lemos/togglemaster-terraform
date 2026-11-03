@@ -86,13 +86,14 @@ grafana:
     server:
       root_url: "%(protocol)s://%(domain)s/grafana/"
       serve_from_sub_path: true
+  # Grafana 13 idles around 250Mi; 256Mi caused OOMKilled restarts (503 via ingress).
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 384Mi
     limits:
       cpu: 500m
-      memory: 256Mi
+      memory: 768Mi
   sidecar:
     datasources:
       uid: prometheus

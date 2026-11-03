@@ -259,4 +259,9 @@ jobs:
         run: bash scripts/cleanup_loadbalancers.sh "${{ env.AWS_REGION }}"
 
       - name: Destroy infrastructure
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          if ! terraform destroy -auto-approve -input=false; then
+            echo "Destroy falhou; limpando resíduos de rede e tentando novamente..."
+            bash scripts/cleanup_vpc_leftovers.sh "$AWS_REGION"
+            terraform destroy -auto-approve -input=false
+          fi

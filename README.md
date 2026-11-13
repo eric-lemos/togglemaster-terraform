@@ -343,11 +343,12 @@ armazenamento e preservação dos pacotes existentes. Não instalam nada no EKS.
 
 ## GitHub Actions
 
-O workflow em `.github/workflows/ci-terraform.yml` executa os jobs `Validate`, `Plan`, `Security`, `Apply` e `Destroy`.
+O workflow em `.github/workflows/terraform.yml` executa os jobs `Validate`, `Plan`, `Security`, `Apply` e `Destroy`.
 
 - `Validate`, `Plan` e `Security` rodam em pull requests e pushes para `main`.
-- `Apply` exige execução manual no branch `main`, com `apply=true`. Aplica o plano de infraestrutura e, em seguida, planeja/aplica o stack Helm separado no mesmo workflow.
-- `Destroy` exige execução manual no branch `main`, com `destroy=true`. Ele remove primeiro os releases Helm e depois a infraestrutura; os jobs `Validate`, `Plan`, `Security` e `Apply` são ignorados.
+- Na execução manual, selecione `plan`, `apply` ou `destroy` em **Operation**. O padrão é `plan`: executa `Validate`, `Plan` e `Security`, sem aplicar o plano. O job `Plan` ainda pode criar ou configurar o bucket de backend.
+- `apply` exige o branch `main`. Aplica o plano de infraestrutura e, em seguida, planeja/aplica o stack Helm separado no mesmo workflow.
+- `destroy` exige o branch `main`. Remove primeiro os releases Helm e depois a infraestrutura; os jobs `Validate`, `Plan`, `Security` e `Apply` são ignorados.
 
 Configure em **Settings > Secrets and variables > Actions**:
 

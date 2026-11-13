@@ -158,6 +158,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Validate PagerDuty integration key
+        env:
+          PAGERDUTY_INTEGRATION_KEY: ${{ secrets.PAGERDUTY_INTEGRATION_KEY }}
+        run: |
+          if [[ -z "$PAGERDUTY_INTEGRATION_KEY" || "$PAGERDUTY_INTEGRATION_KEY" =~ [[:space:]] ]]; then
+            echo "PAGERDUTY_INTEGRATION_KEY must be a non-empty Events API v2 integration key without whitespace." >&2
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -214,6 +223,17 @@ jobs:
           printf '%s/slack' "${DISCORD_WEBHOOK_URL%/}" > "$webhook_file"
           kubectl -n observability create secret generic discord-webhook \
             --from-file="url=$webhook_file" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Configure PagerDuty integration
+        env:
+          PAGERDUTY_INTEGRATION_KEY: ${{ secrets.PAGERDUTY_INTEGRATION_KEY }}
+        run: |
+          set -euo pipefail
+          key_file="$(mktemp)"
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s' "$PAGERDUTY_INTEGRATION_KEY" > "$key_file"
+          kubectl -n observability create secret generic pagerduty-integration \
+            --from-file="routing-key=$key_file" --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Initialize Helm Terraform stack
         run: |

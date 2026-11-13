@@ -174,9 +174,8 @@ O Prometheus calcula o volume com `increase`, que extrapola valores entre
 coletas; o limiar não é uma contagem exata de eventos. O alerta só é avaliado
 quando há métricas de requisições. Ausência de telemetria não dispara esse
 alerta. Após aplicar a stack Helm, confira a regra e seu estado em
-`/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord após a
-configuração abaixo. A integração com PagerDuty e o self-healing ainda não estão
-configurados.
+`/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord e ao
+PagerDuty após a configuração abaixo. O self-healing ainda não está configurado.
 
 ### Notificações no Discord
 
@@ -195,7 +194,7 @@ Após recriar o cluster ou rotacionar o webhook, execute o apply novamente com o
 secret atualizado. A URL permanece armazenada no Secret do Kubernetes; restrinja
 o acesso a ele.
 
-Para executar o apply local, crie o Secret antes de aplicar o stack Helm:
+Para executar o apply local, crie os Secrets antes de aplicar o stack Helm:
 
 ```bash
 (
@@ -215,8 +214,47 @@ Para executar o apply local, crie o Secret antes de aplicar o stack Helm:
 ```
 
 Informe a URL original, sem `/slack` ou parâmetros. Em seguida, aplique o Helm
-como descrito acima. A entrega real no canal deve ser verificada com um alerta
+após configurar também o PagerDuty abaixo. A entrega real no canal deve ser verificada com um alerta
 de teste; a existência da regra, por si só, não confirma a notificação.
+
+### Incidentes no PagerDuty
+
+Crie um serviço no PagerDuty em **Services > Service Directory > New Service**,
+com uma política de escala. Na seção **Integrations**, selecione **Events API
+v2** e copie a Integration Key. Se o serviço já existir, adicione a integração
+na aba **Integrations**. Use a chave da integração Events API v2, não uma chave
+da REST API nem a integração Prometheus (v1).
+
+No repositório Terraform, crie o GitHub Actions secret
+`PAGERDUTY_INTEGRATION_KEY` com essa chave. O apply exige a chave e cria o Secret
+Kubernetes `pagerduty-integration` em `observability`. A chave não é passada ao
+Terraform nem armazenada em seu state, mas permanece no Secret Kubernetes;
+restrinja o acesso a ele. Não a envie no chat nem a versione no Git.
+
+Para criar o Secret localmente depois de preparar o namespace no passo do
+Discord:
+
+```bash
+(
+  set -euo pipefail
+  read -rs -p "PagerDuty Events API v2 integration key: " PAGERDUTY_INTEGRATION_KEY; echo
+  [[ -n "$PAGERDUTY_INTEGRATION_KEY" && ! "$PAGERDUTY_INTEGRATION_KEY" =~ [[:space:]] ]] || {
+    echo "Chave PagerDuty vazia ou contendo espaços." >&2
+    exit 1
+  }
+  key_file="$(mktemp)"
+  trap 'rm -f "$key_file"' EXIT
+  printf '%s' "$PAGERDUTY_INTEGRATION_KEY" > "$key_file"
+  kubectl -n observability create secret generic pagerduty-integration \
+    --from-file="routing-key=$key_file" --dry-run=client -o yaml | kubectl apply -f -
+)
+```
+
+Após criar os dois Secrets, aplique a stack Helm. O alerta
+`ToggleMasterAuthHighErrorRate` é enviado ao Discord e ao PagerDuty; ao resolver,
+o Alertmanager envia a resolução para ambos. Depois do apply, valide a abertura
+e a resolução de um incidente de teste no PagerDuty. Ao recriar o cluster ou
+rotacionar a chave, atualize o secret do GitHub e execute o apply novamente.
 
 O dashboard "ToggleMaster - OTel Collector" mostra a saúde do pipeline: collectors
 ativos, logs e métricas recebidos e enviados, falhas, fila do exporter, memória
@@ -337,6 +375,7 @@ AWS_SECRET_ACCESS_KEY
 AWS_SESSION_TOKEN
 TF_VAR_RDS_INSTANCE_PASSWORDS
 DISCORD_WEBHOOK_URL
+PAGERDUTY_INTEGRATION_KEY
 ```
 
 `AWS_SESSION_TOKEN` é obrigatório apenas para credenciais temporárias. O secret `TF_VAR_RDS_INSTANCE_PASSWORDS` deve ser um objeto JSON em uma única linha:

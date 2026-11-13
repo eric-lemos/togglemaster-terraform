@@ -176,7 +176,12 @@ quando há métricas de requisições. Ausência de telemetria não dispara esse
 alerta. Após aplicar a stack Helm, confira a regra e seu estado em
 `/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord e ao
 PagerDuty após a configuração abaixo. O self-healing do auth-service é gerenciado
-no repositório GitOps e deve ser aplicado e validado separadamente.
+no repositório GitOps e deve ser aplicado e validado separadamente. A rota do
+webhook interno no Alertmanager fica desativada por padrão; só defina
+`self_healing_webhook_enabled = true` em `helm/helm.auto.tfvars` depois de
+preparar o receptor e os secrets conforme o README do GitOps. O repositório ECR
+`togglemaster/github-webhook` é criado pelo Terraform para a imagem do
+receptor.
 
 ### Notificações no Discord
 

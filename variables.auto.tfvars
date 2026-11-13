@@ -323,5 +323,9 @@ ecr = {
     targeting = {
       name = "togglemaster/targeting"
     }
+
+    github_webhook = {
+      name = "togglemaster/github-webhook"
+    }
   }
 }

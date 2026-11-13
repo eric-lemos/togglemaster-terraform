@@ -174,9 +174,49 @@ O Prometheus calcula o volume com `increase`, que extrapola valores entre
 coletas; o limiar não é uma contagem exata de eventos. O alerta só é avaliado
 quando há métricas de requisições. Ausência de telemetria não dispara esse
 alerta. Após aplicar a stack Helm, confira a regra e seu estado em
-`/prometheus/alerts`. O Alertmanager ainda não está integrado a incidentes,
-Discord ou self-healing; portanto, disparar o alerta não envia notificações
-nem reinicia o serviço.
+`/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord após a
+configuração abaixo. A integração com PagerDuty e o self-healing ainda não estão
+configurados.
+
+### Notificações no Discord
+
+No Discord, crie um webhook nas configurações do canal `chat-ops`, em
+**Integrações > Webhooks**, e copie a URL. No repositório Terraform, configure
+o GitHub Actions secret `DISCORD_WEBHOOK_URL` com a URL original, sem `/slack`.
+Não coloque essa URL no Git nem a compartilhe: ela permite enviar mensagens ao
+canal.
+
+O workflow de apply exige esse secret e cria o Secret Kubernetes `discord-webhook`
+no namespace `observability` antes de instalar o Helm. A URL não é passada ao
+Terraform nem armazenada em seu state. O Alertmanager usa o endpoint compatível
+com Slack do Discord e notifica apenas `ToggleMasterAuthHighErrorRate`, tanto
+no disparo quanto na resolução. Os demais alertas continuam no receptor `null`.
+Após recriar o cluster ou rotacionar o webhook, execute o apply novamente com o
+secret atualizado. A URL permanece armazenada no Secret do Kubernetes; restrinja
+o acesso a ele.
+
+Para executar o apply local, crie o Secret antes de aplicar o stack Helm:
+
+```bash
+(
+  set -euo pipefail
+  read -rs -p "Discord webhook URL: " DISCORD_WEBHOOK_URL; echo
+  [[ "$DISCORD_WEBHOOK_URL" =~ ^https://(discord\.com|discordapp\.com)/api/webhooks/[0-9]+/[A-Za-z0-9._-]+/?$ ]] || {
+    echo "URL de webhook inválida; informe a URL original, sem /slack." >&2
+    exit 1
+  }
+  kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+  webhook_file="$(mktemp)"
+  trap 'rm -f "$webhook_file"' EXIT
+  printf '%s/slack' "${DISCORD_WEBHOOK_URL%/}" > "$webhook_file"
+  kubectl -n observability create secret generic discord-webhook \
+    --from-file="url=$webhook_file" --dry-run=client -o yaml | kubectl apply -f -
+)
+```
+
+Informe a URL original, sem `/slack` ou parâmetros. Em seguida, aplique o Helm
+como descrito acima. A entrega real no canal deve ser verificada com um alerta
+de teste; a existência da regra, por si só, não confirma a notificação.
 
 O dashboard "ToggleMaster - OTel Collector" mostra a saúde do pipeline: collectors
 ativos, logs e métricas recebidos e enviados, falhas, fila do exporter, memória
@@ -296,6 +336,7 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 AWS_SESSION_TOKEN
 TF_VAR_RDS_INSTANCE_PASSWORDS
+DISCORD_WEBHOOK_URL
 ```
 
 `AWS_SESSION_TOKEN` é obrigatório apenas para credenciais temporárias. O secret `TF_VAR_RDS_INSTANCE_PASSWORDS` deve ser um objeto JSON em uma única linha:

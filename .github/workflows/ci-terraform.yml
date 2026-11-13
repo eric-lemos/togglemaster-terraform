@@ -77,6 +77,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Validate Discord webhook configuration
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [[ ! "$DISCORD_WEBHOOK_URL" =~ ^https://(discord\.com|discordapp\.com)/api/webhooks/[0-9]+/[A-Za-z0-9._-]+/?$ ]]; then
+            echo "DISCORD_WEBHOOK_URL must be a Discord webhook URL without /slack or query parameters." >&2
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -187,6 +196,24 @@ jobs:
         run: |
           cluster_name="$(terraform output -raw eks_cluster_name)"
           aws eks wait cluster-active --region "$AWS_REGION" --name "$cluster_name"
+
+      - name: Configure Discord webhook
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DISCORD_WEBHOOK_URL" =~ ^https://(discord\.com|discordapp\.com)/api/webhooks/[0-9]+/[A-Za-z0-9._-]+/?$ ]]; then
+            echo "DISCORD_WEBHOOK_URL must be a Discord webhook URL without /slack or query parameters." >&2
+            exit 1
+          fi
+          cluster_name="$(terraform output -raw eks_cluster_name)"
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$cluster_name"
+          kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+          webhook_file="$(mktemp)"
+          trap 'rm -f "$webhook_file"' EXIT
+          printf '%s/slack' "${DISCORD_WEBHOOK_URL%/}" > "$webhook_file"
+          kubectl -n observability create secret generic discord-webhook \
+            --from-file="url=$webhook_file" --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Initialize Helm Terraform stack
         run: |

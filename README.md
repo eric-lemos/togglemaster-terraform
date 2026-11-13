@@ -175,7 +175,8 @@ coletas; o limiar não é uma contagem exata de eventos. O alerta só é avaliad
 quando há métricas de requisições. Ausência de telemetria não dispara esse
 alerta. Após aplicar a stack Helm, confira a regra e seu estado em
 `/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord e ao
-PagerDuty após a configuração abaixo. O self-healing ainda não está configurado.
+PagerDuty após a configuração abaixo. O self-healing do auth-service é gerenciado
+no repositório GitOps e deve ser aplicado e validado separadamente.
 
 ### Notificações no Discord
 

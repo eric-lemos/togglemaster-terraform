@@ -1,4 +1,6 @@
 fullnameOverride: monitoring
+additionalPrometheusRulesMap:
+  togglemaster-auth: ${auth_alert_rules}
 kubeEtcd:
   enabled: false
 kubeControllerManager:

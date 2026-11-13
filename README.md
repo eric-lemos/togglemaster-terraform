@@ -134,66 +134,77 @@ Faça a remoção apenas depois de confirmar os imports no state Helm.
 > planeje migrar para um controller mantido ou para Gateway API. Consulte o
 > [anúncio oficial de aposentadoria](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/).
 
-## Observabilidade no laboratorio
+## Observabilidade no laboratório
 
-As quatro releases sao gerenciadas exclusivamente pelo Terraform no state Helm,
-nao pelo Argo CD. Essa escolha reaproveita o gerenciamento dos pacotes existentes.
-O guia academico menciona tanto codigo IaC/GitOps quanto charts no repositorio
-GitOps: documente essa decisao no relatorio e confirme a interpretacao com o
-professor. Nao crie Applications Argo CD para gerenciar as mesmas releases.
+As quatro releases são gerenciadas exclusivamente pelo Terraform no state Helm,
+não pelo Argo CD. Essa escolha reaproveita o gerenciamento dos pacotes existentes.
+O guia acadêmico menciona tanto código IaC/GitOps quanto charts no repositório
+GitOps: documente essa decisão no relatório e confirme a interpretação com o
+professor. Não crie Applications Argo CD para gerenciar as mesmas releases.
 
-| Release | Chart fixado | Funcao |
+| Release | Chart fixado | Função |
 | --- | --- | --- |
-| `monitoring` | `kube-prometheus-stack` 92.17.0 | Prometheus, Alertmanager, Grafana e metricas Kubernetes |
-| `loki` | `loki` 7.5.0 | Logs via OTLP, SingleBinary com uma replica |
-| `otel-agent` | `opentelemetry-collector` 0.178.2 | DaemonSet que coleta stdout/stderr dos containers |
-| `otel-gateway` | `opentelemetry-collector` 0.178.2 | Recebe OTLP e encaminha logs e metricas |
+| `monitoring` | `kube-prometheus-stack` 92.17.0 | Prometheus, Alertmanager, Grafana e métricas Kubernetes |
+| `loki` | `loki` 7.5.0 | Logs via OTLP, SingleBinary com uma réplica |
+| `otel-agent` | `opentelemetry-collector` 0.178.2 | DaemonSet que coleta stdout/stderr dos contêineres |
+| `otel-gateway` | `opentelemetry-collector` 0.178.2 | Recebe OTLP e encaminha logs e métricas |
 
-As configuracoes ficam em [helm/values](helm/values), e o dashboard versionado
+As configurações ficam em [helm/values](helm/values), e o dashboard versionado
 em [helm/dashboards/togglemaster.json](helm/dashboards/togglemaster.json).
 O Collector Contrib usa a imagem fixada em 0.163.2. Os agentes excluem seus
-proprios logs para evitar realimentacao. A coleta comeca no final dos arquivos:
-gere novas requisicoes para visualizar logs depois da instalacao.
+próprios logs para evitar realimentação. A coleta começa no final dos arquivos:
+gere novas requisições para visualizar logs depois da instalação.
 
-Fluxo: logs dos containers -> agente -> gateway -> Loki. As futuras metricas
-OTLP das aplicacoes serao expostas pelo gateway na porta 8889 e coletadas pelo
-Prometheus. As metricas nativas do cluster sao coletadas diretamente pelo
-Prometheus. As portas OTLP internas do gateway sao 4317 (gRPC) e 4318 (HTTP).
-O pipeline de traces fica desativado ate configurar o APM comercial.
+Fluxo: logs dos contêineres -> agente -> gateway -> Loki. As futuras métricas
+OTLP das aplicações serão expostas pelo gateway na porta 8889 e coletadas pelo
+Prometheus. As métricas nativas do cluster são coletadas diretamente pelo
+Prometheus. As portas OTLP internas do gateway são 4317 (gRPC) e 4318 (HTTP).
+O pipeline de traces fica desativado até configurar o APM comercial.
 
 O dashboard "ToggleMaster - Ecosystem", na pasta ToggleMaster, mostra CPU,
-memoria, reinicios e logs. O painel HTTP depende da futura instrumentacao OTel,
-com a metrica `http.server.request.duration` em segundos e `service.name`;
-ficara sem dados ate essa etapa. Alertmanager esta instalado, mas ainda nao
-ha integracao de incidentes, ChatOps nem self-healing.
+memória, reinícios, logs e requisições HTTP instrumentadas com OpenTelemetry.
+O analytics-service não apresenta requisições HTTP de negócio: seu endpoint
+de health é excluído da instrumentação.
 
-O dashboard "ToggleMaster - OTel Collector" mostra a saude do pipeline: collectors
-ativos, logs e metricas recebidos e enviados, falhas, fila do exporter, memoria
-e CPU. Os dados vem das metricas internas dos collectors (porta 8888), coletadas
-pelo job `otel-collector-internal` do Prometheus. Detalhes tecnicos de cada
-collector tambem podem ser vistos em `/prometheus/targets`.
+O alerta `ToggleMasterAuthHighErrorRate`, definido em
+[helm/alert-rules/auth-service.yaml](helm/alert-rules/auth-service.yaml), dispara
+quando a proporção de respostas 5xx do auth-service ultrapassa 5% durante
+2 minutos, com pelo menos 10 requisições estimadas nos últimos 5 minutos.
+O Prometheus calcula o volume com `increase`, que extrapola valores entre
+coletas; o limiar não é uma contagem exata de eventos. O alerta só é avaliado
+quando há métricas de requisições. Ausência de telemetria não dispara esse
+alerta. Após aplicar a stack Helm, confira a regra e seu estado em
+`/prometheus/alerts`. O Alertmanager ainda não está integrado a incidentes,
+Discord ou self-healing; portanto, disparar o alerta não envia notificações
+nem reinicia o serviço.
 
-**Armazenamento efemero:** nao sao criados PVCs. Prometheus tem retencao de
-3 dias limitada a 2 GB; Loki tem retencao de 72 horas. Recriar pods de
-armazenamento perde o historico, e alterar configuracoes/usuarios no Grafana
-pela interface nao garante persistencia. Configuracoes versionadas sao
-recriadas. Essa stack nao e uma instalacao de producao nem de alta disponibilidade.
-Verifique CPU, memoria e disco livres nos nos antes do apply; os limites sao
-iniciais para laboratorio, nao uma garantia de capacidade no EKS.
+O dashboard "ToggleMaster - OTel Collector" mostra a saúde do pipeline: collectors
+ativos, logs e métricas recebidos e enviados, falhas, fila do exporter, memória
+e CPU. Os dados vêm das métricas internas dos collectors (porta 8888), coletadas
+pelo job `otel-collector-internal` do Prometheus. Detalhes técnicos de cada
+collector também podem ser vistos em `/prometheus/targets`.
 
-Loki e OTLP continuam apenas como Services internos, sem autenticacao nem TLS;
-nao os exponha publicamente. Grafana, Prometheus e Alertmanager sao publicados
-por caminho no mesmo ingress nginx dos microservicos, em HTTP:
+**Armazenamento efêmero:** não são criados PVCs. Prometheus tem retenção de
+3 dias limitada a 2 GB; Loki tem retenção de 72 horas. Recriar pods de
+armazenamento perde o histórico, e alterar configurações/usuários no Grafana
+pela interface não garante persistência. Configurações versionadas são
+recriadas. Essa stack não é uma instalação de produção nem de alta disponibilidade.
+Verifique CPU, memória e disco livres nos nós antes do apply; os limites são
+iniciais para laboratório, não uma garantia de capacidade no EKS.
 
-| Caminho | Autenticacao |
+Loki e OTLP continuam apenas como Services internos, sem autenticação nem TLS;
+não os exponha publicamente. Grafana, Prometheus e Alertmanager são publicados
+por caminho no mesmo ingress nginx dos microsserviços, em HTTP:
+
+| Caminho | Autenticação |
 | --- | --- |
 | `/grafana/` | Login do Grafana (`admin`, senha gerada pelo chart) |
 | `/prometheus/` | Basic auth do nginx (`admin`, senha gerada pelo Terraform) |
 | `/alertmanager/` | Basic auth do nginx (mesma credencial do Prometheus) |
 
-A senha do basic auth e gerada por `random_password` e fica no state Helm e no
+A senha do basic auth é gerada por `random_password` e fica no state Helm e no
 Secret `monitoring-ui-basic-auth` (hash bcrypt na chave `auth`). Nenhuma senha
-fica no Git. Como nao ha TLS, use a exposicao apenas no laboratorio e nao
+fica no Git. Como não há TLS, use a exposição apenas no laboratório e não
 publique senhas nem outputs de Secrets.
 
 Instale usando o fluxo `terraform -chdir=helm plan/apply` descrito acima.
@@ -210,7 +221,7 @@ kubectl -n observability logs deployment/otel-gateway --tail=50
 kubectl -n observability logs daemonset/otel-agent --tail=50
 ```
 
-Acesse pelo navegador usando o endereco do ingress:
+Acesse pelo navegador usando o endereço do ingress:
 
 ```bash
 INGRESS=$(kubectl -n ingress-nginx get svc ingress-nginx-controller \
@@ -224,18 +235,18 @@ kubectl -n observability get secret monitoring-ui-basic-auth \
   -o jsonpath='{.data.password}' | base64 --decode; echo
 ```
 
-O primeiro comando de senha e o login do Grafana; o segundo e o basic auth de
-Prometheus e Alertmanager. Port-forward continua disponivel; no WSL use
+O primeiro comando de senha é o login do Grafana; o segundo é o basic auth de
+Prometheus e Alertmanager. Port-forward continua disponível; no WSL use
 `kubectl -n observability port-forward svc/monitoring-grafana 3000:80 --address 0.0.0.0`
 para abrir `http://localhost:3000` no navegador do Windows.
 
 No Grafana, confira os datasources Prometheus
 e Loki, o dashboard e os targets Prometheus. Consulte no Loki
-`{k8s_namespace_name="togglemaster"}` depois de gerar novas requisicoes.
-A porta 8889 so apresenta metricas de aplicacao apos receber dados OTLP;
-nao confunda um target acessivel com a instrumentacao concluida.
+`{k8s_namespace_name="togglemaster"}` depois de gerar novas requisições.
+A porta 8889 só apresenta métricas de aplicação após receber dados OTLP;
+não confunda um target acessível com a instrumentação concluída.
 
-Validacao local sem acesso ao cluster:
+Validação local sem acesso ao cluster:
 
 ```bash
 terraform -chdir=helm init -backend=false
@@ -244,7 +255,7 @@ terraform -chdir=helm test
 ```
 
 Os testes usam providers simulados e verificam releases, dashboard, endpoints,
-armazenamento e preservacao dos pacotes existentes. Nao instalam nada no EKS.
+armazenamento e preservação dos pacotes existentes. Não instalam nada no EKS.
 
 ## GitHub Actions
 

@@ -1,3 +1,5 @@
+self_healing_webhook_enabled = true
+
 helm = {
   packages = {
     monitoring = {

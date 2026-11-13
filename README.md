@@ -180,7 +180,7 @@ no repositório GitOps e deve ser aplicado e validado separadamente. A rota do
 webhook interno no Alertmanager fica desativada por padrão; só defina
 `self_healing_webhook_enabled = true` em `helm/helm.auto.tfvars` depois de
 preparar o receptor e os secrets conforme o README do GitOps. O repositório ECR
-`togglemaster/github-webhook` é criado pelo Terraform para a imagem do
+`togglemaster/webhook` é criado pelo Terraform para a imagem do
 receptor.
 
 ### Notificações no Discord

@@ -47,6 +47,7 @@ prometheus:
         memory: 1Gi
     additionalScrapeConfigs:
       - job_name: otel-application-metrics
+        scrape_interval: 15s
         static_configs:
           - targets:
               - otel-gateway.observability.svc.cluster.local:8889
@@ -78,18 +79,18 @@ alertmanager:
         - receiver: discord-chat-ops
           matchers:
             - alertname = "ToggleMasterAuthHighErrorRate"
-          group_wait: 30s
-          group_interval: 5m
-          repeat_interval: 4h
+          group_wait: 5s
+          group_interval: 1m
+          repeat_interval: 2m
 # %{ if self_healing_webhook_enabled }
           continue: true
         - receiver: auth-self-healing
           matchers:
             - alertname = "ToggleMasterAuthHighErrorRate"
             - service = "auth-service"
-          group_wait: 30s
-          group_interval: 5m
-          repeat_interval: 15m
+          group_wait: 5s
+          group_interval: 1m
+          repeat_interval: 2m
 # %{ endif }
     receivers:
       - name: "null"

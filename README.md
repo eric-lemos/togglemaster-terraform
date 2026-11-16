@@ -169,7 +169,11 @@ de health é excluído da instrumentação.
 O alerta `ToggleMasterAuthHighErrorRate`, definido em
 [helm/alert-rules/auth-service.yaml](helm/alert-rules/auth-service.yaml), dispara
 quando a proporção de respostas 5xx do auth-service ultrapassa 5% durante
-2 minutos, com pelo menos 10 requisições estimadas nos últimos 5 minutos.
+30 segundos, com pelo menos 10 requisições estimadas nos últimos 5 minutos.
+Para o laboratório, as métricas das aplicações são coletadas e a regra é
+avaliada a cada 15 segundos; a primeira notificação aguarda 5 segundos.
+Enquanto o alerta permanecer ativo, as notificações ao Discord, PagerDuty e
+self-healing são repetidas a cada 2 minutos.
 O Prometheus calcula o volume com `increase`, que extrapola valores entre
 coletas; o limiar não é uma contagem exata de eventos. O alerta só é avaliado
 quando há métricas de requisições. Ausência de telemetria não dispara esse

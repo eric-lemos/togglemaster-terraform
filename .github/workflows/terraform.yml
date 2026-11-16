@@ -236,8 +236,17 @@ jobs:
             -backend-config="region=$AWS_REGION"
       - name: Generate Helm plan
         run: |
+          set -euo pipefail
+          if ! cluster_name="$(terraform output -raw eks_cluster_name)"; then
+            echo "Unable to read eks_cluster_name from the infrastructure state. Run Apply Infra first or check access to the state." >&2
+            exit 1
+          fi
+          if [[ -z "$cluster_name" ]]; then
+            echo "The infrastructure state has no EKS cluster name. Run Apply Infra before planning Helm." >&2
+            exit 1
+          fi
           export TF_VAR_aws_region="$AWS_REGION"
-          export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
+          export TF_VAR_eks_cluster_name="$cluster_name"
           terraform -chdir=helm plan -input=false -out=helm.tfplan
       - name: Generate plan checksum
         run: sha256sum helm/helm.tfplan > helm.tfplan.sha256

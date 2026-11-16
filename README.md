@@ -365,7 +365,9 @@ em pull requests e pushes para `main`:
   validam e planejam ambos. O scan de segurança é compartilhado.
 - Planos exigem credenciais AWS e não rodam em pull requests de forks.
   O plano Helm também exige state da infraestrutura e EKS acessível; após uma
-  instalação nova, execute **Apply Infra** antes de tentar o plano Helm.
+  instalação nova ou um destroy, execute **Apply Infra** antes de tentar o
+  plano Helm. Um plano automático disparado por push pode falhar até que o EKS
+  seja recriado; depois, execute novamente o workflow.
   O plano de infraestrutura ainda pode criar ou configurar o bucket de backend.
 
 Na execução manual, selecione em **Operation**:

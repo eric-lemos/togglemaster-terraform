@@ -52,9 +52,9 @@ terraform apply
 ```
 
 O Terraform gerencia somente a infraestrutura AWS. Depois de **Terraform Ops →
-Apply Infra**, use **K8s Ops → Helm Apply** no repositório GitOps para instalar
-os charts. Os valores, dashboards e alertas ficam no GitOps, e os releases são
-gerenciados diretamente pelo Helm CLI, não por Terraform.
+Apply**, use **K8s Ops → Apply** no repositório GitOps para instalar os charts
+e aplicar os manifests. Os valores, dashboards e alertas ficam no GitOps, e os
+releases são gerenciados diretamente pelo Helm CLI, não por Terraform.
 
 Para destruir pelo GitHub, execute **Terraform Ops → Destroy**. O workflow
 consulta o EKS no state, desinstala os sete releases conhecidos e só então
@@ -75,7 +75,7 @@ escopo amplo e poderia afetar recursos não relacionados. Se o destroy ficar
 bloqueado, identifique e revise as dependências antes de removê-las manualmente.
 Os scripts antigos `cleanup_loadbalancers.sh` e `cleanup_vpc_leftovers.sh` não
 devem ser usados sem revisão: podem remover recursos além dos releases do projeto.
-Não execute o destroy e o Helm Apply simultaneamente em repositórios diferentes.
+Não execute o destroy e o Apply do GitOps simultaneamente.
 
 > **Atenção:** o Kubernetes aposentou o projeto Ingress NGINX em março de 2026;
 > não haverá novas correções ou atualizações de segurança. Esta configuração
@@ -102,8 +102,8 @@ O Collector Contrib usa a imagem fixada em 0.163.2. Os agentes excluem seus
 próprios logs para evitar realimentação. A coleta começa no final dos arquivos:
 gere novas requisições para visualizar logs depois da instalação.
 
-Fluxo: logs dos contêineres -> agente -> gateway -> Loki. As futuras métricas
-OTLP das aplicações serão expostas pelo gateway na porta 8889 e coletadas pelo
+Fluxo: logs dos contêineres -> agente -> gateway -> Loki. As métricas
+OTLP das aplicações são expostas pelo gateway na porta 8889 e coletadas pelo
 Prometheus. As métricas nativas do cluster são coletadas diretamente pelo
 Prometheus. As portas OTLP internas do gateway são 4317 (gRPC) e 4318 (HTTP).
 O pipeline de traces fica desativado até configurar o APM comercial.
@@ -116,7 +116,7 @@ de health é excluído da instrumentação.
 O alerta `ToggleMasterAuthHighErrorRate`, definido em
 [helm/alert-rules/auth-service.yaml](https://github.com/eric-lemos/togglemaster-gitops/blob/main/helm/alert-rules/auth-service.yaml), dispara
 quando a proporção de respostas 5xx do auth-service ultrapassa 5% durante
-30 segundos, com pelo menos 10 requisições estimadas nos últimos 5 minutos.
+30 segundos, com pelo menos 10 requisições estimadas nos últimos 2 minutos.
 Para o laboratório, as métricas das aplicações são coletadas e a regra é
 avaliada a cada 15 segundos; a primeira notificação aguarda 5 segundos.
 Enquanto o alerta permanecer ativo, as notificações ao Discord, PagerDuty e
@@ -130,7 +130,7 @@ PagerDuty após a configuração abaixo. O self-healing do auth-service é geren
 no repositório GitOps e deve ser aplicado e validado separadamente. A rota
 fica desativada por padrão; após criar os Secrets e validar o receptor, defina
 `SELF_HEALING_ENABLED=true` para autorizar reinícios e execute **K8s Ops →
-Helm Apply** para habilitar a rota. Ao desativar a variável, execute Helm Apply
+Apply** para habilitar a rota. Ao desativar a variável, execute Apply
 novamente para desativar a rota.
 
 ### Notificações no Discord e PagerDuty
@@ -139,7 +139,7 @@ Configure os secrets `DISCORD_WEBHOOK_URL` (URL original, sem `/slack`) e
 `PAGERDUTY_INTEGRATION_KEY` (chave Events API v2) no repositório GitOps. O job
 Helm cria os Secrets Kubernetes no namespace `observability`. Restrinja o acesso
 a eles e não compartilhe os valores. Após configurar ou rotacionar as credenciais,
-execute novamente **K8s Ops → Helm Apply** e valide a entrega de um alerta.
+execute novamente **K8s Ops → Apply** e valide a entrega de um alerta.
 
 O dashboard "ToggleMaster - OTel Collector" mostra a saúde do pipeline: collectors
 ativos, logs e métricas recebidos e enviados, falhas, fila do exporter, memória
@@ -170,7 +170,7 @@ A senha do basic auth é gerada pelo workflow GitOps e fica no Secret
 Nenhuma senha fica no Git. Como não há TLS, use a exposição apenas no laboratório e não
 publique senhas nem outputs de Secrets.
 
-Instale usando **K8s Ops → Helm Apply** no GitOps.
+Instale usando **K8s Ops → Apply** no GitOps.
 Para inspecionar o cluster, atualize antes o kubeconfig:
 
 ```bash
@@ -215,9 +215,9 @@ O workflow `.github/workflows/terraform.yml` valida e planeja a infraestrutura
 em pull requests e pushes relevantes para `main`. Planos exigem credenciais AWS,
 não rodam em pull requests de forks e podem criar ou configurar o bucket de backend.
 
-Na execução manual, selecione **Apply Infra** para validar, planejar e aplicar a
+Na execução manual, selecione **Apply** para validar, planejar e aplicar a
 infraestrutura, ou **Destroy** para desinstalar os releases conhecidos e depois
-destruir a infraestrutura. Helm Apply é executado no workflow GitOps.
+destruir a infraestrutura. Os charts são instalados pelo Apply do workflow GitOps.
 
 As operações manuais de apply e destroy exigem `main`. Os planos gerados no
 mesmo run são aplicados após as validações, sem uma etapa de aprovação manual.

@@ -8,7 +8,7 @@ variable "eks_cluster_name" {
   type        = string
 }
 
-variable "self_healing_webhook_enabled" {
+variable "self_healing_enabled" {
   description = "Enable Alertmanager notifications to the internal self-healing webhook."
   type        = bool
   default     = false

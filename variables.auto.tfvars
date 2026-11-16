@@ -324,8 +324,8 @@ ecr = {
       name = "togglemaster/targeting"
     }
 
-    webhook = {
-      name = "togglemaster/webhook"
+    self_healing = {
+      name = "togglemaster/self_healing"
     }
   }
 }

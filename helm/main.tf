@@ -27,12 +27,12 @@ resource "helm_release" "this" {
     [
       for values_file in lookup(var.helm.packages[each.key], "values_files", []) :
       templatefile("${path.module}/${values_file}", {
-        togglemaster_dashboard       = jsonencode(file("${path.module}/dashboards/togglemaster.json"))
-        otel_collector_dashboard     = jsonencode(file("${path.module}/dashboards/otel-collector.json"))
-        auth_alert_rules             = jsonencode(yamldecode(file("${path.module}/alert-rules/auth-service.yaml")))
-        monitoring_ui_password       = random_password.monitoring_ui.result
-        monitoring_basic_auth        = "admin:${random_password.monitoring_ui.bcrypt_hash}"
-        self_healing_webhook_enabled = var.self_healing_webhook_enabled
+        togglemaster_dashboard   = jsonencode(file("${path.module}/dashboards/togglemaster.json"))
+        otel_collector_dashboard = jsonencode(file("${path.module}/dashboards/otel-collector.json"))
+        auth_alert_rules         = jsonencode(yamldecode(file("${path.module}/alert-rules/auth-service.yaml")))
+        monitoring_ui_password   = random_password.monitoring_ui.result
+        monitoring_basic_auth    = "admin:${random_password.monitoring_ui.bcrypt_hash}"
+        self_healing_enabled     = var.self_healing_enabled
       })
     ]
   )

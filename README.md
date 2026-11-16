@@ -53,8 +53,8 @@ terraform apply
 
 O Helm é gerenciado por um stack Terraform separado, com state próprio
 (`helm/terraform.tfstate`), e instalado depois que o EKS estiver disponível.
-O workflow aplica a infraestrutura e os charts em sequência, com um único
-acionamento manual da pipeline. Para execução local, aplique os dois stacks:
+No GitHub Actions, aplique primeiro a infraestrutura e depois os charts em
+duas execuções manuais. Para execução local, aplique os dois stacks:
 
 ```bash
 terraform apply
@@ -77,10 +77,11 @@ hostname nem TLS configurados neste momento, então o acesso é feito pelo ender
 do Load Balancer em HTTP. O provider Helm acessa o endpoint do EKS com AWS CLI,
 sem exigir kubeconfig local.
 
-O workflow GitHub Actions usa um único acionamento manual: aplica o plano de
-infraestrutura, espera o EKS ficar ativo e então inicializa, planeja e aplica o
-stack Helm separado. No destroy, remove os releases antes de limpar os Load
-Balancers e destruir o EKS.
+No GitHub Actions, use **Apply Infra** e, após sua conclusão, **Apply Helm**.
+O plano Helm exige um EKS acessível; o apply espera o EKS ficar ativo e configura
+os Secrets de notificações.
+No destroy, o workflow remove os releases antes de limpar os Load Balancers e
+destruir o EKS.
 
 Para remover os recursos manualmente:
 
@@ -181,11 +182,18 @@ alerta. Após aplicar a stack Helm, confira a regra e seu estado em
 `/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord e ao
 PagerDuty após a configuração abaixo. O self-healing do auth-service é gerenciado
 no repositório GitOps e deve ser aplicado e validado separadamente. A rota do
-webhook interno no Alertmanager fica desativada por padrão; só defina
-`self_healing_webhook_enabled = true` em `helm/helm.auto.tfvars` depois de
-preparar o receptor e os secrets conforme o README do GitOps. O repositório ECR
-`togglemaster/webhook` é criado pelo Terraform para a imagem do
-receptor.
+receptor interno no Alertmanager fica desativada durante a migração:
+com o EKS existente, publique `self_healing_enabled = false` em
+`helm/helm.auto.tfvars` e execute **Apply Helm** antes de **Apply Infra**.
+O apply de infraestrutura cria o ECR `togglemaster/self_healing` e remove o
+antigo `togglemaster/webhook`, **excluindo suas imagens**. Em seguida execute
+**K8s Ops → Kubernetes Apply** no GitOps para publicar a nova imagem e criar
+os Secrets e o certificado para `self-healing.togglemaster.svc`. Somente
+depois de verificar o receptor, publique e aplique com **Apply Helm**
+`self_healing_enabled = true`. O receptor pode ficar temporariamente
+indisponível durante a migração; siga a sequência completa no README do GitOps,
+incluindo a variável GitHub `SELF_HEALING_ENABLED`, que é independente da
+variável Helm.
 
 ### Notificações no Discord
 
@@ -342,17 +350,38 @@ terraform -chdir=helm validate
 terraform -chdir=helm test
 ```
 
-Os testes usam providers simulados e verificam releases, dashboard, endpoints,
-armazenamento e preservação dos pacotes existentes. Não instalam nada no EKS.
+No estado atual não há arquivos `.tftest.hcl` ou `.tftest.json` no stack Helm:
+`terraform test` não executa casos de teste até que sejam adicionados.
 
 ## GitHub Actions
 
-O workflow em `.github/workflows/terraform.yml` executa os jobs `Validate`, `Plan`, `Security`, `Apply` e `Destroy`.
+O workflow em `.github/workflows/terraform.yml` identifica os arquivos alterados
+em pull requests e pushes para `main`:
 
-- `Validate`, `Plan` e `Security` rodam em pull requests e pushes para `main`.
-- Na execução manual, selecione `plan`, `apply` ou `destroy` em **Operation**. O padrão é `plan`: executa `Validate`, `Plan` e `Security`, sem aplicar o plano. O job `Plan` ainda pode criar ou configurar o bucket de backend.
-- `apply` exige o branch `main`. Aplica o plano de infraestrutura e, em seguida, planeja/aplica o stack Helm separado no mesmo workflow.
-- `destroy` exige o branch `main`. Remove primeiro os releases Helm e depois a infraestrutura; os jobs `Validate`, `Plan`, `Security` e `Apply` são ignorados.
+- Mudanças em `helm/` validam e planejam somente o stack Helm; mudanças nos
+  arquivos Terraform da infraestrutura validam e planejam somente a
+  infraestrutura. Se ambos mudarem, os dois planos são executados.
+- Alterações no próprio workflow ou no script compartilhado de nome do bucket
+  validam e planejam ambos. O scan de segurança é compartilhado.
+- Planos exigem credenciais AWS e não rodam em pull requests de forks.
+  O plano Helm também exige state da infraestrutura e EKS acessível; após uma
+  instalação nova, execute **Apply Infra** antes de tentar o plano Helm.
+  O plano de infraestrutura ainda pode criar ou configurar o bucket de backend.
+
+Na execução manual, selecione em **Operation**:
+
+- **Apply Infra**: valida, planeja e aplica apenas a infraestrutura.
+- **Apply Helm**: valida, planeja e aplica apenas o Helm, usando o EKS existente.
+- **Destroy**: remove primeiro os releases Helm e depois a infraestrutura.
+  Se não for possível consultar o state ou o EKS, a operação falha em vez de
+  ignorar a remoção dos releases.
+
+As operações manuais de apply e destroy exigem `main`. Os planos gerados no
+mesmo run são aplicados após as validações, sem uma etapa de aprovação manual.
+Os artefatos de plano podem conter dados sensíveis e são retidos por um dia.
+As execuções compartilham um grupo de concorrência para evitar operações
+simultâneas; o GitHub mantém apenas uma execução pendente por grupo, podendo
+substituir uma execução pendente mais antiga.
 
 Configure em **Settings > Secrets and variables > Actions**:
 

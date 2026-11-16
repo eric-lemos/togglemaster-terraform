@@ -1,4 +1,4 @@
-self_healing_webhook_enabled = true
+self_healing_enabled = false
 
 helm = {
   packages = {

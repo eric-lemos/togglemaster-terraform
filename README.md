@@ -128,9 +128,10 @@ alerta. Após aplicar a stack Helm, confira a regra e seu estado em
 `/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord e ao
 PagerDuty após a configuração abaixo. O self-healing do auth-service é gerenciado
 no repositório GitOps e deve ser aplicado e validado separadamente. A rota
-fica desativada por padrão; após criar os Secrets e validar o receptor, habilite
-`SELF_HEALING_ALERT_ROUTE_ENABLED` e execute **K8s Ops → Helm Apply**. Essa
-variável é independente de `SELF_HEALING_ENABLED`, que autoriza reinícios.
+fica desativada por padrão; após criar os Secrets e validar o receptor, defina
+`SELF_HEALING_ENABLED=true` para autorizar reinícios e execute **K8s Ops →
+Helm Apply** para habilitar a rota. Ao desativar a variável, execute Helm Apply
+novamente para desativar a rota.
 
 ### Notificações no Discord e PagerDuty
 

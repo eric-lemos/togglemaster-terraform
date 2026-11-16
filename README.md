@@ -51,83 +51,31 @@ terraform plan
 terraform apply
 ```
 
-O Helm é gerenciado por um stack Terraform separado, com state próprio
-(`helm/terraform.tfstate`), e instalado depois que o EKS estiver disponível.
-No GitHub Actions, aplique primeiro a infraestrutura e depois os charts em
-duas execuções manuais. Para execução local, aplique os dois stacks:
+O Terraform gerencia somente a infraestrutura AWS. Depois de **Terraform Ops →
+Apply Infra**, use **K8s Ops → Helm Apply** no repositório GitOps para instalar
+os charts. Os valores, dashboards e alertas ficam no GitOps, e os releases são
+gerenciados diretamente pelo Helm CLI, não por Terraform.
+
+Para destruir pelo GitHub, execute **Terraform Ops → Destroy**. O workflow
+consulta o EKS no state, desinstala os sete releases conhecidos e só então
+destrói a infraestrutura. Falhas na consulta ou desinstalação interrompem o
+destroy. O state Helm remoto antigo não é alterado nem apagado automaticamente.
+Em um ambiente novo não é necessário migrar releases. Não aplique o state Helm
+antigo; avalie sua retenção e dados sensíveis separadamente.
+
+Para destroy local, com Helm e kubectl instalados e o backend inicializado:
 
 ```bash
-terraform apply
-
-export TF_VAR_aws_region="$AWS_REGION"
-export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
-terraform -chdir=helm init \
-  -backend-config="bucket=$TF_BACKEND_BUCKET" \
-  -backend-config="region=$AWS_REGION"
-terraform -chdir=helm plan
-terraform -chdir=helm apply
-```
-
-O stack Helm instala Ingress NGINX, Metrics Server, Argo CD e a stack de
-observabilidade descrita abaixo.
-O controller Ingress usa a classe `nginx` e um Service `LoadBalancer`; as subnets
-públicas recebem as tags AWS necessárias para descoberta pelo Kubernetes. O
-manifesto do GitOps encaminha os cinco serviços por prefixo de caminho. Não há
-hostname nem TLS configurados neste momento, então o acesso é feito pelo endereço
-do Load Balancer em HTTP. O provider Helm acessa o endpoint do EKS com AWS CLI,
-sem exigir kubeconfig local.
-
-No GitHub Actions, use **Apply Infra** e, após sua conclusão, **Apply Helm**.
-O plano Helm exige um EKS acessível; o apply espera o EKS ficar ativo e configura
-os Secrets de notificações.
-No destroy, o workflow remove os releases antes de limpar os Load Balancers e
-destruir o EKS.
-
-Para remover os recursos manualmente:
-
-```bash
-export TF_VAR_aws_region="$AWS_REGION"
-export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
-terraform -chdir=helm init \
-  -backend-config="bucket=$TF_BACKEND_BUCKET" \
-  -backend-config="region=$AWS_REGION"
-terraform -chdir=helm destroy
+bash scripts/uninstall_helm.sh
 terraform destroy
 ```
 
-Se os releases já tiverem sido aplicados pelo stack raiz anterior, transfira
-o gerenciamento para o state separado antes de executar `terraform apply` na
-infraestrutura. Com o backend principal inicializado, importe cada release no
-stack Helm:
-
-```bash
-export TF_VAR_aws_region="$AWS_REGION"
-export TF_VAR_eks_cluster_name="$(terraform output -raw eks_cluster_name)"
-terraform -chdir=helm init \
-  -backend-config="bucket=$TF_BACKEND_BUCKET" \
-  -backend-config="region=$AWS_REGION"
-terraform -chdir=helm import \
-  'helm_release.this["ingress-nginx"]' \
-  ingress-nginx/ingress-nginx
-terraform -chdir=helm import \
-  'helm_release.this["metrics-server"]' \
-  kube-system/metrics-server
-terraform -chdir=helm import \
-  'helm_release.this["argocd"]' \
-  argocd/argocd
-```
-
-Confirme que os releases aparecem com `terraform -chdir=helm state list`.
-Depois remova as referências correspondentes do state raiz sem desinstalá-los:
-
-```bash
-terraform state rm \
-  'module.helm.helm_release.this["ingress-nginx"]' \
-  'module.helm.helm_release.this["metrics-server"]' \
-  'module.helm.helm_release.this["argocd"]'
-```
-
-Faça a remoção apenas depois de confirmar os imports no state Helm.
+A limpeza automática antiga de load balancers e ENIs não é executada: ela tinha
+escopo amplo e poderia afetar recursos não relacionados. Se o destroy ficar
+bloqueado, identifique e revise as dependências antes de removê-las manualmente.
+Os scripts antigos `cleanup_loadbalancers.sh` e `cleanup_vpc_leftovers.sh` não
+devem ser usados sem revisão: podem remover recursos além dos releases do projeto.
+Não execute o destroy e o Helm Apply simultaneamente em repositórios diferentes.
 
 > **Atenção:** o Kubernetes aposentou o projeto Ingress NGINX em março de 2026;
 > não haverá novas correções ou atualizações de segurança. Esta configuração
@@ -137,11 +85,9 @@ Faça a remoção apenas depois de confirmar os imports no state Helm.
 
 ## Observabilidade no laboratório
 
-As quatro releases são gerenciadas exclusivamente pelo Terraform no state Helm,
-não pelo Argo CD. Essa escolha reaproveita o gerenciamento dos pacotes existentes.
-O guia acadêmico menciona tanto código IaC/GitOps quanto charts no repositório
-GitOps: documente essa decisão no relatório e confirme a interpretação com o
-professor. Não crie Applications Argo CD para gerenciar as mesmas releases.
+As quatro releases de observabilidade são gerenciadas pelo Helm CLI no workflow
+GitOps, não pelo Terraform nem pelo Argo CD. Não crie Applications Argo CD
+para gerenciar os mesmos releases.
 
 | Release | Chart fixado | Função |
 | --- | --- | --- |
@@ -150,8 +96,8 @@ professor. Não crie Applications Argo CD para gerenciar as mesmas releases.
 | `otel-agent` | `opentelemetry-collector` 0.178.2 | DaemonSet que coleta stdout/stderr dos contêineres |
 | `otel-gateway` | `opentelemetry-collector` 0.178.2 | Recebe OTLP e encaminha logs e métricas |
 
-As configurações ficam em [helm/values](helm/values), e o dashboard versionado
-em [helm/dashboards/togglemaster.json](helm/dashboards/togglemaster.json).
+As configurações ficam em [helm/values](https://github.com/eric-lemos/togglemaster-gitops/tree/main/helm/values), e o dashboard versionado
+em [helm/dashboards/togglemaster.json](https://github.com/eric-lemos/togglemaster-gitops/blob/main/helm/dashboards/togglemaster.json).
 O Collector Contrib usa a imagem fixada em 0.163.2. Os agentes excluem seus
 próprios logs para evitar realimentação. A coleta começa no final dos arquivos:
 gere novas requisições para visualizar logs depois da instalação.
@@ -168,7 +114,7 @@ O analytics-service não apresenta requisições HTTP de negócio: seu endpoint
 de health é excluído da instrumentação.
 
 O alerta `ToggleMasterAuthHighErrorRate`, definido em
-[helm/alert-rules/auth-service.yaml](helm/alert-rules/auth-service.yaml), dispara
+[helm/alert-rules/auth-service.yaml](https://github.com/eric-lemos/togglemaster-gitops/blob/main/helm/alert-rules/auth-service.yaml), dispara
 quando a proporção de respostas 5xx do auth-service ultrapassa 5% durante
 30 segundos, com pelo menos 10 requisições estimadas nos últimos 5 minutos.
 Para o laboratório, as métricas das aplicações são coletadas e a regra é
@@ -181,98 +127,18 @@ quando há métricas de requisições. Ausência de telemetria não dispara esse
 alerta. Após aplicar a stack Helm, confira a regra e seu estado em
 `/prometheus/alerts`. O Alertmanager encaminha esse alerta ao Discord e ao
 PagerDuty após a configuração abaixo. O self-healing do auth-service é gerenciado
-no repositório GitOps e deve ser aplicado e validado separadamente. A rota do
-receptor interno no Alertmanager fica desativada durante a migração:
-com o EKS existente, publique `self_healing_enabled = false` em
-`helm/helm.auto.tfvars` e execute **Apply Helm** antes de **Apply Infra**.
-O apply de infraestrutura cria o ECR `togglemaster/self_healing` e remove o
-antigo `togglemaster/webhook`, **excluindo suas imagens**. Em seguida execute
-**K8s Ops → Kubernetes Apply** no GitOps para publicar a nova imagem e criar
-os Secrets e o certificado para `self-healing.togglemaster.svc`. Somente
-depois de verificar o receptor, publique e aplique com **Apply Helm**
-`self_healing_enabled = true`. O receptor pode ficar temporariamente
-indisponível durante a migração; siga a sequência completa no README do GitOps,
-incluindo a variável GitHub `SELF_HEALING_ENABLED`, que é independente da
-variável Helm.
+no repositório GitOps e deve ser aplicado e validado separadamente. A rota
+fica desativada por padrão; após criar os Secrets e validar o receptor, habilite
+`SELF_HEALING_ALERT_ROUTE_ENABLED` e execute **K8s Ops → Helm Apply**. Essa
+variável é independente de `SELF_HEALING_ENABLED`, que autoriza reinícios.
 
-### Notificações no Discord
+### Notificações no Discord e PagerDuty
 
-No Discord, crie um webhook nas configurações do canal `chat-ops`, em
-**Integrações > Webhooks**, e copie a URL. No repositório Terraform, configure
-o GitHub Actions secret `DISCORD_WEBHOOK_URL` com a URL original, sem `/slack`.
-Não coloque essa URL no Git nem a compartilhe: ela permite enviar mensagens ao
-canal.
-
-O workflow de apply exige esse secret e cria o Secret Kubernetes `discord-webhook`
-no namespace `observability` antes de instalar o Helm. A URL não é passada ao
-Terraform nem armazenada em seu state. O Alertmanager usa o endpoint compatível
-com Slack do Discord e notifica apenas `ToggleMasterAuthHighErrorRate`, tanto
-no disparo quanto na resolução. Os demais alertas continuam no receptor `null`.
-Após recriar o cluster ou rotacionar o webhook, execute o apply novamente com o
-secret atualizado. A URL permanece armazenada no Secret do Kubernetes; restrinja
-o acesso a ele.
-
-Para executar o apply local, crie os Secrets antes de aplicar o stack Helm:
-
-```bash
-(
-  set -euo pipefail
-  read -rs -p "Discord webhook URL: " DISCORD_WEBHOOK_URL; echo
-  [[ "$DISCORD_WEBHOOK_URL" =~ ^https://(discord\.com|discordapp\.com)/api/webhooks/[0-9]+/[A-Za-z0-9._-]+/?$ ]] || {
-    echo "URL de webhook inválida; informe a URL original, sem /slack." >&2
-    exit 1
-  }
-  kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
-  webhook_file="$(mktemp)"
-  trap 'rm -f "$webhook_file"' EXIT
-  printf '%s/slack' "${DISCORD_WEBHOOK_URL%/}" > "$webhook_file"
-  kubectl -n observability create secret generic discord-webhook \
-    --from-file="url=$webhook_file" --dry-run=client -o yaml | kubectl apply -f -
-)
-```
-
-Informe a URL original, sem `/slack` ou parâmetros. Em seguida, aplique o Helm
-após configurar também o PagerDuty abaixo. A entrega real no canal deve ser verificada com um alerta
-de teste; a existência da regra, por si só, não confirma a notificação.
-
-### Incidentes no PagerDuty
-
-Crie um serviço no PagerDuty em **Services > Service Directory > New Service**,
-com uma política de escala. Na seção **Integrations**, selecione **Events API
-v2** e copie a Integration Key. Se o serviço já existir, adicione a integração
-na aba **Integrations**. Use a chave da integração Events API v2, não uma chave
-da REST API nem a integração Prometheus (v1).
-
-No repositório Terraform, crie o GitHub Actions secret
-`PAGERDUTY_INTEGRATION_KEY` com essa chave. O apply exige a chave e cria o Secret
-Kubernetes `pagerduty-integration` em `observability`. A chave não é passada ao
-Terraform nem armazenada em seu state, mas permanece no Secret Kubernetes;
-restrinja o acesso a ele. Não a envie no chat nem a versione no Git.
-
-Para criar o Secret localmente depois de preparar o namespace no passo do
-Discord:
-
-```bash
-(
-  set -euo pipefail
-  read -rs -p "PagerDuty Events API v2 integration key: " PAGERDUTY_INTEGRATION_KEY; echo
-  [[ -n "$PAGERDUTY_INTEGRATION_KEY" && ! "$PAGERDUTY_INTEGRATION_KEY" =~ [[:space:]] ]] || {
-    echo "Chave PagerDuty vazia ou contendo espaços." >&2
-    exit 1
-  }
-  key_file="$(mktemp)"
-  trap 'rm -f "$key_file"' EXIT
-  printf '%s' "$PAGERDUTY_INTEGRATION_KEY" > "$key_file"
-  kubectl -n observability create secret generic pagerduty-integration \
-    --from-file="routing-key=$key_file" --dry-run=client -o yaml | kubectl apply -f -
-)
-```
-
-Após criar os dois Secrets, aplique a stack Helm. O alerta
-`ToggleMasterAuthHighErrorRate` é enviado ao Discord e ao PagerDuty; ao resolver,
-o Alertmanager envia a resolução para ambos. Depois do apply, valide a abertura
-e a resolução de um incidente de teste no PagerDuty. Ao recriar o cluster ou
-rotacionar a chave, atualize o secret do GitHub e execute o apply novamente.
+Configure os secrets `DISCORD_WEBHOOK_URL` (URL original, sem `/slack`) e
+`PAGERDUTY_INTEGRATION_KEY` (chave Events API v2) no repositório GitOps. O job
+Helm cria os Secrets Kubernetes no namespace `observability`. Restrinja o acesso
+a eles e não compartilhe os valores. Após configurar ou rotacionar as credenciais,
+execute novamente **K8s Ops → Helm Apply** e valide a entrega de um alerta.
 
 O dashboard "ToggleMaster - OTel Collector" mostra a saúde do pipeline: collectors
 ativos, logs e métricas recebidos e enviados, falhas, fila do exporter, memória
@@ -295,19 +161,19 @@ por caminho no mesmo ingress nginx dos microsserviços, em HTTP:
 | Caminho | Autenticação |
 | --- | --- |
 | `/grafana/` | Login do Grafana (`admin`, senha gerada pelo chart) |
-| `/prometheus/` | Basic auth do nginx (`admin`, senha gerada pelo Terraform) |
+| `/prometheus/` | Basic auth do nginx (`admin`, senha gerada pelo workflow GitOps) |
 | `/alertmanager/` | Basic auth do nginx (mesma credencial do Prometheus) |
 
-A senha do basic auth é gerada por `random_password` e fica no state Helm e no
-Secret `monitoring-ui-basic-auth` (hash bcrypt na chave `auth`). Nenhuma senha
-fica no Git. Como não há TLS, use a exposição apenas no laboratório e não
+A senha do basic auth é gerada pelo workflow GitOps e fica no Secret
+`monitoring-ui-basic-auth` (hash bcrypt na chave `auth`), não no state Terraform.
+Nenhuma senha fica no Git. Como não há TLS, use a exposição apenas no laboratório e não
 publique senhas nem outputs de Secrets.
 
-Instale usando o fluxo `terraform -chdir=helm plan/apply` descrito acima.
+Instale usando **K8s Ops → Helm Apply** no GitOps.
 Para inspecionar o cluster, atualize antes o kubeconfig:
 
 ```bash
-aws eks update-kubeconfig --region "$AWS_REGION" --name "$TF_VAR_eks_cluster_name"
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$(terraform output -raw eks_cluster_name)"
 kubectl get nodes
 kubectl top nodes
 kubectl -n observability get pods,svc,pvc
@@ -342,41 +208,15 @@ e Loki, o dashboard e os targets Prometheus. Consulte no Loki
 A porta 8889 só apresenta métricas de aplicação após receber dados OTLP;
 não confunda um target acessível com a instrumentação concluída.
 
-Validação local sem acesso ao cluster:
-
-```bash
-terraform -chdir=helm init -backend=false
-terraform -chdir=helm validate
-terraform -chdir=helm test
-```
-
-No estado atual não há arquivos `.tftest.hcl` ou `.tftest.json` no stack Helm:
-`terraform test` não executa casos de teste até que sejam adicionados.
-
 ## GitHub Actions
 
-O workflow em `.github/workflows/terraform.yml` identifica os arquivos alterados
-em pull requests e pushes para `main`:
+O workflow `.github/workflows/terraform.yml` valida e planeja a infraestrutura
+em pull requests e pushes relevantes para `main`. Planos exigem credenciais AWS,
+não rodam em pull requests de forks e podem criar ou configurar o bucket de backend.
 
-- Mudanças em `helm/` validam e planejam somente o stack Helm; mudanças nos
-  arquivos Terraform da infraestrutura validam e planejam somente a
-  infraestrutura. Se ambos mudarem, os dois planos são executados.
-- Alterações no próprio workflow ou no script compartilhado de nome do bucket
-  validam e planejam ambos. O scan de segurança é compartilhado.
-- Planos exigem credenciais AWS e não rodam em pull requests de forks.
-  O plano Helm também exige state da infraestrutura e EKS acessível; após uma
-  instalação nova ou um destroy, execute **Apply Infra** antes de tentar o
-  plano Helm. Um plano automático disparado por push pode falhar até que o EKS
-  seja recriado; depois, execute novamente o workflow.
-  O plano de infraestrutura ainda pode criar ou configurar o bucket de backend.
-
-Na execução manual, selecione em **Operation**:
-
-- **Apply Infra**: valida, planeja e aplica apenas a infraestrutura.
-- **Apply Helm**: valida, planeja e aplica apenas o Helm, usando o EKS existente.
-- **Destroy**: remove primeiro os releases Helm e depois a infraestrutura.
-  Se não for possível consultar o state ou o EKS, a operação falha em vez de
-  ignorar a remoção dos releases.
+Na execução manual, selecione **Apply Infra** para validar, planejar e aplicar a
+infraestrutura, ou **Destroy** para desinstalar os releases conhecidos e depois
+destruir a infraestrutura. Helm Apply é executado no workflow GitOps.
 
 As operações manuais de apply e destroy exigem `main`. Os planos gerados no
 mesmo run são aplicados após as validações, sem uma etapa de aprovação manual.
@@ -416,8 +256,6 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 AWS_SESSION_TOKEN
 TF_VAR_RDS_INSTANCE_PASSWORDS
-DISCORD_WEBHOOK_URL
-PAGERDUTY_INTEGRATION_KEY
 ```
 
 `AWS_SESSION_TOKEN` é obrigatório apenas para credenciais temporárias. O secret `TF_VAR_RDS_INSTANCE_PASSWORDS` deve ser um objeto JSON em uma única linha:

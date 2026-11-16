@@ -24,10 +24,10 @@ on:
       operation:
         description: "Operation"
         required: true
-        default: "Apply Infra"
+        default: "Apply"
         type: choice
         options:
-          - "Apply Infra"
+          - "Apply"
           - "Destroy"
 
 permissions:
@@ -45,7 +45,7 @@ env:
 jobs:
   validate-infra:
     name: Validate Infrastructure
-    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'Apply Infra'
+    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'Apply'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -121,7 +121,7 @@ jobs:
   apply-infra:
     name: Apply Infrastructure
     needs: [plan-infra, security]
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'Apply Infra' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'Apply' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

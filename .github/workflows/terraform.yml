@@ -43,8 +43,8 @@ env:
   TF_VAR_rds_instance_passwords: ${{ secrets.TF_VAR_RDS_INSTANCE_PASSWORDS }}
 
 jobs:
-  validate-infra:
-    name: Validate Infrastructure
+  validate:
+    name: Validate
     if: github.event_name != 'workflow_dispatch' || inputs.operation == 'Apply'
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +63,7 @@ jobs:
 
   security:
     name: Security
-    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'Apply Infra'
+    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'Apply'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -76,9 +76,9 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
 
-  plan-infra:
-    name: Plan Infrastructure
-    needs: validate-infra
+  plan:
+    name: Plan
+    needs: validate
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     steps:
@@ -118,9 +118,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  apply-infra:
-    name: Apply Infrastructure
-    needs: [plan-infra, security]
+  apply:
+    name: Apply
+    needs: [plan, security]
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'Apply' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
